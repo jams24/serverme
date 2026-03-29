@@ -12,6 +12,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/serverme/serverme/proto"
+	"github.com/serverme/serverme/server/internal/auth"
 	"github.com/serverme/serverme/server/internal/db"
 	"github.com/serverme/serverme/server/internal/tunnel"
 	"github.com/xtaci/smux"
@@ -113,22 +114,27 @@ func (c *Conn) Authenticate(validToken string) error {
 }
 
 // AuthenticateWithDB performs auth against the database (API key) or falls back to static token.
-func (c *Conn) AuthenticateWithDB(staticToken string, database *db.DB) error {
-	var auth proto.Auth
-	if err := proto.ReadTypedMsg(c.ctrlStr, proto.TypeAuth, &auth); err != nil {
+// JWTValidator validates JWT tokens.
+type JWTValidator interface {
+	Validate(tokenStr string) (*auth.Claims, error)
+}
+
+func (c *Conn) AuthenticateWithDB(staticToken string, database *db.DB, jwtMgr JWTValidator) error {
+	var authMsg proto.Auth
+	if err := proto.ReadTypedMsg(c.ctrlStr, proto.TypeAuth, &authMsg); err != nil {
 		return fmt.Errorf("read auth: %w", err)
 	}
 
-	c.log = c.log.With().Str("client_version", auth.Version).Str("os", auth.OS).Logger()
+	c.log = c.log.With().Str("client_version", authMsg.Version).Str("os", authMsg.OS).Logger()
 
 	authenticated := false
 
-	// Try DB auth if available and token looks like an API key
-	if database != nil && strings.HasPrefix(auth.Token, "sm_live_") {
+	// Try API key auth (sm_live_...)
+	if database != nil && strings.HasPrefix(authMsg.Token, "sm_live_") {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		user, err := database.ValidateAPIKey(ctx, auth.Token)
+		user, err := database.ValidateAPIKey(ctx, authMsg.Token)
 		if err == nil && user != nil {
 			authenticated = true
 			c.userID = user.ID
@@ -136,8 +142,18 @@ func (c *Conn) AuthenticateWithDB(staticToken string, database *db.DB) error {
 		}
 	}
 
+	// Try JWT auth (from serverme login)
+	if !authenticated && jwtMgr != nil && strings.HasPrefix(authMsg.Token, "eyJ") {
+		claims, err := jwtMgr.Validate(authMsg.Token)
+		if err == nil {
+			authenticated = true
+			c.userID = claims.UserID
+			c.log = c.log.With().Str("user_id", claims.UserID).Str("email", claims.Email).Logger()
+		}
+	}
+
 	// Fall back to static token
-	if !authenticated && auth.Token == staticToken {
+	if !authenticated && authMsg.Token == staticToken {
 		authenticated = true
 	}
 
@@ -149,8 +165,8 @@ func (c *Conn) AuthenticateWithDB(staticToken string, database *db.DB) error {
 	}
 
 	// Generate or reuse client ID
-	if auth.ClientID != "" {
-		c.id = auth.ClientID
+	if authMsg.ClientID != "" {
+		c.id = authMsg.ClientID
 	} else {
 		c.id = tunnel.GenerateSubdomain() + tunnel.GenerateSubdomain()
 	}

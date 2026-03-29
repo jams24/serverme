@@ -3,8 +3,8 @@
 # ServerMe CLI Installer
 #
 # Usage:
-#   curl -fsSL https://get.serverme.dev | sh
-#   wget -qO- https://get.serverme.dev | sh
+#   curl -fsSL https://get.serverme.site | sh
+#   wget -qO- https://get.serverme.site | sh
 #
 # Options:
 #   SERVERME_VERSION=1.0.0  Install a specific version

@@ -17,7 +17,7 @@ from serverme.types import (
     User,
 )
 
-DEFAULT_SERVER_URL = "https://api.serverme.dev"
+DEFAULT_SERVER_URL = "https://api.serverme.site"
 
 
 class ServerMe:

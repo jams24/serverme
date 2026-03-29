@@ -1,6 +1,6 @@
 # @serverme/sdk
 
-Official JavaScript/TypeScript SDK for [ServerMe](https://serverme.dev) — open-source tunneling platform.
+Official JavaScript/TypeScript SDK for [ServerMe](https://serverme.site) — open-source tunneling platform.
 
 ## Install
 
@@ -31,7 +31,7 @@ console.log(result);
 ## Live Traffic Streaming
 
 ```typescript
-const stream = client.inspect.subscribe('https://abc123.serverme.dev');
+const stream = client.inspect.subscribe('https://abc123.serverme.site');
 
 for await (const req of stream) {
   console.log(`${req.method} ${req.path} -> ${req.statusCode} (${req.durationMs}ms)`);

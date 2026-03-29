@@ -1,6 +1,6 @@
 # serverme
 
-Official Python SDK for [ServerMe](https://serverme.dev) — open-source tunneling platform.
+Official Python SDK for [ServerMe](https://serverme.site) — open-source tunneling platform.
 
 ## Install
 
@@ -32,7 +32,7 @@ asyncio.run(main())
 
 ```python
 async with ServerMe(authtoken="sm_live_...") as client:
-    async for req in client.inspect.subscribe("https://abc123.serverme.dev"):
+    async for req in client.inspect.subscribe("https://abc123.serverme.site"):
         print(f"{req.method} {req.path} -> {req.status_code}")
 ```
 

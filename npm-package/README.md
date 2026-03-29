@@ -37,7 +37,7 @@ brew install serverme/tap/serverme
 go install github.com/jams24/serverme/cli/cmd/serverme@latest
 
 # Shell script
-curl -fsSL https://get.serverme.dev | sh
+curl -fsSL https://get.serverme.site | sh
 ```
 
 ## Links

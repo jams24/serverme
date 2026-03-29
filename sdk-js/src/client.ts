@@ -10,7 +10,7 @@ import type {
 } from "./types";
 import { ApiError, AuthError, RateLimitError, NotFoundError } from "./errors";
 
-const DEFAULT_SERVER_URL = "https://api.serverme.dev";
+const DEFAULT_SERVER_URL = "https://api.serverme.site";
 const DEFAULT_TIMEOUT = 30_000;
 
 /**
@@ -164,7 +164,7 @@ class InspectClient {
     tunnelUrl: string,
     wsUrl?: string
   ): AsyncIterable<CapturedRequest> & { close: () => void } {
-    const base = wsUrl || "wss://api.serverme.dev";
+    const base = wsUrl || "wss://api.serverme.site";
     const url = `${base}/api/v1/ws/traffic/${encodeURIComponent(tunnelUrl)}`;
 
     let ws: WebSocket | null = null;

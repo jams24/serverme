@@ -76,7 +76,7 @@ go install github.com/serverme/serverme/cli/cmd/serverme@latest
 
 ## Authenticate
 
-Create an account at [serverme.dev](https://serverme.dev) and save your API key:
+Create an account at [serverme.site](https://serverme.site) and save your API key:
 
 \`\`\`bash
 serverme authtoken sm_live_your_token_here
@@ -97,7 +97,7 @@ ServerMe                               (Ctrl+C to quit)
 Version              1.0.0
 Web Inspector        http://127.0.0.1:4040
 
-Forwarding           https://a1b2c3d4.serverme.dev -> localhost:3000
+Forwarding           https://a1b2c3d4.serverme.site -> localhost:3000
 \`\`\`
 
 Your local server is now accessible at the public URL. Open the Web Inspector at \`localhost:4040\` to see requests flowing through in real-time.
@@ -163,7 +163,7 @@ Internet → ServerMe Server → Encrypted Tunnel → Your CLI → Local Service
 \`\`\`
 
 1. The CLI connects to the ServerMe server via TLS
-2. The server assigns a public URL (e.g., \`https://abc123.serverme.dev\`)
+2. The server assigns a public URL (e.g., \`https://abc123.serverme.site\`)
 3. When someone visits that URL, the request travels through the encrypted tunnel to your local service
 4. The response travels back the same way
 
@@ -358,7 +358,7 @@ Default: \`~/.serverme/serverme.yml\`
 ## Format
 
 \`\`\`yaml
-server: tunnel.serverme.dev:443
+server: tunnel.serverme.site:443
 authtoken: sm_live_your_token_here
 log_level: info
 inspector_addr: 127.0.0.1:4040
@@ -429,7 +429,7 @@ Authorization: Bearer <jwt_token>
 Obtain a token via login:
 
 \`\`\`bash
-curl -X POST https://api.serverme.dev/api/v1/auth/login \\
+curl -X POST https://api.serverme.site/api/v1/auth/login \\
   -H "Content-Type: application/json" \\
   -d '{"email":"you@example.com","password":"your_password"}'
 \`\`\`
@@ -500,7 +500,7 @@ GET /api/v1/tunnels
 \`\`\`json
 [
   {
-    "url": "http://abc123.serverme.dev",
+    "url": "http://abc123.serverme.site",
     "protocol": "http",
     "name": "webapp",
     "client_id": "abc123def456"
@@ -538,7 +538,7 @@ POST /api/v1/domains
   "instructions": {
     "type": "CNAME",
     "name": "api.example.com",
-    "target": "tunnel.serverme.dev"
+    "target": "tunnel.serverme.site"
   }
 }
 \`\`\`
@@ -672,7 +672,7 @@ const result = await client.inspect.replay(tunnels[0].url, requests[0].id);
 ## Live Traffic Streaming
 
 \`\`\`typescript
-const stream = client.inspect.subscribe('https://abc123.serverme.dev');
+const stream = client.inspect.subscribe('https://abc123.serverme.site');
 
 for await (const req of stream) {
   console.log(\`\${req.method} \${req.path} -> \${req.statusCode}\`);
@@ -778,7 +778,7 @@ except RateLimitError as e:
 1. **Add the domain** via the dashboard or API:
 
 \`\`\`bash
-curl -X POST https://api.serverme.dev/api/v1/domains \\
+curl -X POST https://api.serverme.site/api/v1/domains \\
   -H "Authorization: Bearer <token>" \\
   -H "Content-Type: application/json" \\
   -d '{"domain": "api.example.com"}'
@@ -787,13 +787,13 @@ curl -X POST https://api.serverme.dev/api/v1/domains \\
 2. **Add a CNAME record** in your DNS provider:
 
 \`\`\`
-CNAME  api.example.com  →  tunnel.serverme.dev
+CNAME  api.example.com  →  tunnel.serverme.site
 \`\`\`
 
 3. **Verify** the domain:
 
 \`\`\`bash
-curl -X POST https://api.serverme.dev/api/v1/domains/<id>/verify \\
+curl -X POST https://api.serverme.site/api/v1/domains/<id>/verify \\
   -H "Authorization: Bearer <token>"
 \`\`\`
 
@@ -808,7 +808,7 @@ serverme http 3000 --hostname api.example.com
 Pro and Business plans support wildcard domains:
 
 \`\`\`bash
-serverme http 3000 --hostname "*.myapp.serverme.dev"
+serverme http 3000 --hostname "*.myapp.serverme.site"
 \`\`\`
 
 The subdomain is passed to your app via the \`X-Forwarded-Host\` header.

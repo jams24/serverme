@@ -2,6 +2,7 @@ package api
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -11,14 +12,23 @@ import (
 	"strings"
 )
 
-// handleGoogleLogin redirects the user to Google's OAuth consent screen.
+type statePayload struct {
+	Nonce    string `json:"n"`
+	Callback string `json:"c,omitempty"`
+}
+
 func (s *Server) handleGoogleLogin(w http.ResponseWriter, r *http.Request) {
 	if s.google == nil || s.google.ClientID == "" {
 		writeError(w, http.StatusNotImplemented, "Google OAuth not configured")
 		return
 	}
 
-	state := generateOAuthState()
+	payload := statePayload{
+		Nonce:    generateOAuthState(),
+		Callback: r.URL.Query().Get("callback"),
+	}
+	stateJSON, _ := json.Marshal(payload)
+	state := base64.URLEncoding.EncodeToString(stateJSON)
 
 	authURL := fmt.Sprintf(
 		"https://accounts.google.com/o/oauth2/v2/auth?client_id=%s&redirect_uri=%s&response_type=code&scope=%s&state=%s&access_type=offline&prompt=select_account",
@@ -31,7 +41,6 @@ func (s *Server) handleGoogleLogin(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, authURL, http.StatusFound)
 }
 
-// handleGoogleCallback handles the OAuth callback from Google.
 func (s *Server) handleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	if s.google == nil {
 		writeError(w, http.StatusNotImplemented, "Google OAuth not configured")
@@ -40,12 +49,20 @@ func (s *Server) handleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 
 	code := r.URL.Query().Get("code")
 	if code == "" {
-		errMsg := r.URL.Query().Get("error")
-		redirectWithError(w, r, s.google.FrontendURL, "OAuth failed: "+errMsg)
+		redirectWithError(w, r, s.google.FrontendURL, "OAuth failed: "+r.URL.Query().Get("error"))
 		return
 	}
 
-	// Exchange code for tokens
+	var cliCallback string
+	if stateB64 := r.URL.Query().Get("state"); stateB64 != "" {
+		if stateJSON, err := base64.URLEncoding.DecodeString(stateB64); err == nil {
+			var payload statePayload
+			if json.Unmarshal(stateJSON, &payload) == nil {
+				cliCallback = payload.Callback
+			}
+		}
+	}
+
 	tokenData, err := exchangeGoogleCode(s.google, code)
 	if err != nil {
 		s.log.Error().Err(err).Msg("Google token exchange failed")
@@ -53,7 +70,6 @@ func (s *Server) handleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get user info from Google
 	userInfo, err := getGoogleUserInfo(tokenData.AccessToken)
 	if err != nil {
 		s.log.Error().Err(err).Msg("Google user info failed")
@@ -66,43 +82,37 @@ func (s *Server) handleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Find or create user
 	user, err := s.db.GetUserByEmail(r.Context(), userInfo.Email)
 	if err != nil {
-		s.log.Error().Err(err).Msg("DB lookup failed")
 		redirectWithError(w, r, s.google.FrontendURL, "Internal error")
 		return
 	}
 
 	if user == nil {
-		// Create new user (use a random password since they'll use OAuth)
 		randPass := make([]byte, 32)
 		rand.Read(randPass)
 		user, err = s.db.CreateUser(r.Context(), userInfo.Email, userInfo.Name, hex.EncodeToString(randPass))
 		if err != nil {
-			s.log.Error().Err(err).Msg("Create user failed")
 			redirectWithError(w, r, s.google.FrontendURL, "Failed to create account")
 			return
 		}
-
-		// Generate initial API key for new users
 		s.db.GenerateAPIKey(r.Context(), user.ID, "default")
 		s.log.Info().Str("email", userInfo.Email).Msg("new user created via Google OAuth")
 	}
 
-	// Generate JWT
 	token, err := s.jwt.Generate(user.ID, user.Email, user.Plan)
 	if err != nil {
 		redirectWithError(w, r, s.google.FrontendURL, "Token generation failed")
 		return
 	}
 
-	// Redirect to frontend with token
-	redirectURL := fmt.Sprintf("%s/auth/callback?token=%s", s.google.FrontendURL, url.QueryEscape(token))
-	http.Redirect(w, r, redirectURL, http.StatusFound)
+	if cliCallback != "" && strings.HasPrefix(cliCallback, "http://127.0.0.1") {
+		http.Redirect(w, r, fmt.Sprintf("%s?token=%s", cliCallback, url.QueryEscape(token)), http.StatusFound)
+	} else {
+		http.Redirect(w, r, fmt.Sprintf("%s/auth/callback?token=%s", s.google.FrontendURL, url.QueryEscape(token)), http.StatusFound)
+	}
 }
 
-// Google token exchange types
 type googleTokenResponse struct {
 	AccessToken  string `json:"access_token"`
 	TokenType    string `json:"token_type"`
@@ -127,27 +137,19 @@ func exchangeGoogleCode(cfg *GoogleOAuthConfig, code string) (*googleTokenRespon
 		"grant_type":    {"authorization_code"},
 	}
 
-	resp, err := http.Post(
-		"https://oauth2.googleapis.com/token",
-		"application/x-www-form-urlencoded",
-		strings.NewReader(data.Encode()),
-	)
+	resp, err := http.Post("https://oauth2.googleapis.com/token", "application/x-www-form-urlencoded", strings.NewReader(data.Encode()))
 	if err != nil {
-		return nil, fmt.Errorf("token request: %w", err)
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
-
 	if resp.StatusCode != 200 {
 		return nil, fmt.Errorf("token exchange failed (%d): %s", resp.StatusCode, string(body))
 	}
 
 	var result googleTokenResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("parse token: %w", err)
-	}
-
+	json.Unmarshal(body, &result)
 	return &result, nil
 }
 
@@ -162,10 +164,7 @@ func getGoogleUserInfo(accessToken string) (*googleUserInfo, error) {
 	defer resp.Body.Close()
 
 	var info googleUserInfo
-	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
-		return nil, err
-	}
-
+	json.NewDecoder(resp.Body).Decode(&info)
 	return &info, nil
 }
 
@@ -176,6 +175,5 @@ func generateOAuthState() string {
 }
 
 func redirectWithError(w http.ResponseWriter, r *http.Request, frontendURL, errMsg string) {
-	redirectURL := fmt.Sprintf("%s/sign-in?error=%s", frontendURL, url.QueryEscape(errMsg))
-	http.Redirect(w, r, redirectURL, http.StatusFound)
+	http.Redirect(w, r, fmt.Sprintf("%s/sign-in?error=%s", frontendURL, url.QueryEscape(errMsg)), http.StatusFound)
 }

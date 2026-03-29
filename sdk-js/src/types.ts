@@ -2,7 +2,7 @@
 export interface ServerMeOptions {
   /** API key (format: sm_live_...) */
   authtoken: string;
-  /** Server API base URL. Defaults to https://api.serverme.dev */
+  /** Server API base URL. Defaults to https://api.serverme.site */
   serverUrl?: string;
   /** Request timeout in ms. Defaults to 30000. */
   timeout?: number;
@@ -30,7 +30,7 @@ export interface TunnelOptions {
 
 /** An active tunnel. */
 export interface Tunnel {
-  /** Public URL (e.g., https://abc123.serverme.dev) */
+  /** Public URL (e.g., https://abc123.serverme.site) */
   url: string;
   /** Protocol type */
   protocol: string;

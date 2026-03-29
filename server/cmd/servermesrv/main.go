@@ -150,7 +150,7 @@ func main() {
 
 	// Start TLS control listener
 	go func() {
-		if err := listenControl(*controlAddr, *tlsCert, *tlsKey, *authToken, *domain, scheme, serverHost, registry, manager, tcpProxy, database, log); err != nil {
+		if err := listenControl(*controlAddr, *tlsCert, *tlsKey, *authToken, *domain, scheme, serverHost, registry, manager, tcpProxy, database, jwtMgr, log); err != nil {
 			log.Fatal().Err(err).Msg("control listener error")
 		}
 	}()
@@ -170,7 +170,7 @@ func main() {
 	log.Info().Msg("server stopped")
 }
 
-func listenControl(addr, certFile, keyFile, authToken, domain, scheme, serverHost string, registry *tunnel.Registry, manager *control.Manager, tcpProxy *proxy.TCPProxy, database *db.DB, log zerolog.Logger) error {
+func listenControl(addr, certFile, keyFile, authToken, domain, scheme, serverHost string, registry *tunnel.Registry, manager *control.Manager, tcpProxy *proxy.TCPProxy, database *db.DB, jwtMgr *auth.JWTManager, log zerolog.Logger) error {
 	var listener net.Listener
 	var err error
 
@@ -211,11 +211,11 @@ func listenControl(addr, certFile, keyFile, authToken, domain, scheme, serverHos
 			continue
 		}
 
-		go handleClient(conn, smuxConfig, authToken, domain, scheme, serverHost, registry, manager, tcpProxy, database, log)
+		go handleClient(conn, smuxConfig, authToken, domain, scheme, serverHost, registry, manager, tcpProxy, database, jwtMgr, log)
 	}
 }
 
-func handleClient(conn net.Conn, smuxConfig *smux.Config, authToken, domain, scheme, serverHost string, registry *tunnel.Registry, manager *control.Manager, tcpProxy *proxy.TCPProxy, database *db.DB, log zerolog.Logger) {
+func handleClient(conn net.Conn, smuxConfig *smux.Config, authToken, domain, scheme, serverHost string, registry *tunnel.Registry, manager *control.Manager, tcpProxy *proxy.TCPProxy, database *db.DB, jwtMgr *auth.JWTManager, log zerolog.Logger) {
 	clientLog := log.With().Str("remote", conn.RemoteAddr().String()).Logger()
 	clientLog.Debug().Msg("new connection")
 
@@ -234,7 +234,7 @@ func handleClient(conn net.Conn, smuxConfig *smux.Config, authToken, domain, sch
 	}
 
 	// Authenticate: try DB auth first, fall back to static token
-	if err := ctrlConn.AuthenticateWithDB(authToken, database); err != nil {
+	if err := ctrlConn.AuthenticateWithDB(authToken, database, jwtMgr); err != nil {
 		clientLog.Warn().Err(err).Msg("authentication failed")
 		ctrlConn.Close()
 		return

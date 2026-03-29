@@ -38,7 +38,7 @@ ServerMe                               (Ctrl+C to quit)
 Version              1.0.0
 Web Inspector        http://127.0.0.1:4040
 
-Forwarding           https://a1b2c3d4.serverme.dev -> localhost:8080
+Forwarding           https://a1b2c3d4.serverme.site -> localhost:8080
 ```
 
 ## Self-Host (One Command)
