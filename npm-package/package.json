@@ -1,0 +1,39 @@
+{
+  "name": "serverme-cli",
+  "version": "1.0.0",
+  "description": "CLI for ServerMe — open-source tunnel to expose localhost to the internet",
+  "bin": {
+    "serverme": "bin/cli.js"
+  },
+  "scripts": {
+    "postinstall": "node bin/install.js"
+  },
+  "keywords": [
+    "serverme",
+    "tunnel",
+    "ngrok",
+    "localhost",
+    "cli",
+    "expose",
+    "webhook"
+  ],
+  "author": "ServerMe",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jams24/serverme"
+  },
+  "homepage": "https://serverme.site",
+  "engines": {
+    "node": ">=16"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ]
+}
