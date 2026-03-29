@@ -1,34 +1,43 @@
 package inspect
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"sync"
+	"time"
+
+	"github.com/rs/zerolog"
+	"github.com/serverme/serverme/server/internal/db"
 )
 
 // Store manages captured requests across all tunnels and notifies subscribers.
 type Store struct {
 	mu      sync.RWMutex
-	buffers map[string]*RingBuffer // tunnelURL -> ring buffer
-	subs    map[string][]chan *CapturedRequest // tunnelURL -> subscriber channels
+	buffers map[string]*RingBuffer
+	subs    map[string][]chan *CapturedRequest
 	subsMu  sync.RWMutex
+	db      *db.DB
+	log     zerolog.Logger
 }
 
-// NewStore creates a new inspection store.
-func NewStore() *Store {
+// NewStore creates a new inspection store. If database is nil, operates in memory-only mode.
+func NewStore(database *db.DB, log zerolog.Logger) *Store {
 	return &Store{
 		buffers: make(map[string]*RingBuffer),
 		subs:    make(map[string][]chan *CapturedRequest),
+		db:      database,
+		log:     log.With().Str("component", "inspect_store").Logger(),
 	}
 }
 
-// Capture stores a captured request and notifies subscribers.
+// Capture stores a captured request in memory, persists to DB, and notifies subscribers.
 func (s *Store) Capture(req *CapturedRequest) {
 	if req.ID == "" {
 		req.ID = generateID()
 	}
 
-	// Store in ring buffer
+	// Store in ring buffer (in-memory, for fast access)
 	s.mu.Lock()
 	buf, ok := s.buffers[req.TunnelURL]
 	if !ok {
@@ -39,6 +48,35 @@ func (s *Store) Capture(req *CapturedRequest) {
 
 	buf.Add(req)
 
+	// Persist to database (async, non-blocking)
+	if s.db != nil {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			row := &db.CapturedRequestRow{
+				ID:              req.ID,
+				TunnelURL:       req.TunnelURL,
+				UserID:          req.UserID,
+				Timestamp:       req.Timestamp,
+				DurationMs:      float64(req.Duration),
+				Method:          req.Method,
+				Path:            req.Path,
+				Query:           req.Query,
+				StatusCode:      req.StatusCode,
+				RequestHeaders:  req.RequestHeaders,
+				ResponseHeaders: req.ResponseHeaders,
+				RequestSize:     req.RequestSize,
+				ResponseSize:    req.ResponseSize,
+				RemoteAddr:      req.RemoteAddr,
+			}
+
+			if err := s.db.SaveCapturedRequest(ctx, row); err != nil {
+				s.log.Warn().Err(err).Str("id", req.ID).Msg("failed to persist captured request")
+			}
+		}()
+	}
+
 	// Notify subscribers
 	s.subsMu.RLock()
 	subs := s.subs[req.TunnelURL]
@@ -48,12 +86,11 @@ func (s *Store) Capture(req *CapturedRequest) {
 		select {
 		case ch <- req:
 		default:
-			// subscriber too slow, skip
 		}
 	}
 }
 
-// List returns captured requests for a tunnel.
+// List returns captured requests for a tunnel (from memory).
 func (s *Store) List(tunnelURL string) []*CapturedRequest {
 	s.mu.RLock()
 	buf, ok := s.buffers[tunnelURL]
@@ -65,7 +102,15 @@ func (s *Store) List(tunnelURL string) []*CapturedRequest {
 	return buf.List()
 }
 
-// Get retrieves a specific captured request.
+// ListFromDB returns persisted captured requests from the database.
+func (s *Store) ListFromDB(ctx context.Context, tunnelURL string, limit int) ([]db.CapturedRequestRow, error) {
+	if s.db == nil {
+		return nil, nil
+	}
+	return s.db.ListCapturedRequests(ctx, tunnelURL, limit)
+}
+
+// Get retrieves a specific captured request by ID (from memory).
 func (s *Store) Get(tunnelURL, requestID string) *CapturedRequest {
 	s.mu.RLock()
 	buf, ok := s.buffers[tunnelURL]
@@ -103,7 +148,7 @@ func (s *Store) Unsubscribe(tunnelURL string, ch chan *CapturedRequest) {
 	}
 }
 
-// Clear removes all captured requests for a tunnel.
+// Clear removes all captured requests for a tunnel (memory only).
 func (s *Store) Clear(tunnelURL string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

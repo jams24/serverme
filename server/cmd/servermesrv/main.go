@@ -58,8 +58,8 @@ func main() {
 	// Components
 	registry := tunnel.NewRegistry()
 	manager := control.NewManager(log)
-	inspectStore := inspect.NewStore()
-	httpProxy := proxy.NewHTTPProxy(registry, manager, inspectStore, log)
+	var inspectStore *inspect.Store // initialized after DB
+	var httpProxy *proxy.HTTPProxy  // initialized after inspectStore
 	tcpProxy := proxy.NewTCPProxy(registry, manager, log)
 	_ = proxy.NewTLSProxy(registry, manager, log)
 	_ = policy.NewRateLimiter(20, 40) // default rate limiter
@@ -89,6 +89,10 @@ func main() {
 	} else {
 		log.Warn().Msg("no database URL provided, running without user auth (dev mode)")
 	}
+
+	// Initialize inspect store and HTTP proxy (after DB is available)
+	inspectStore = inspect.NewStore(database, log)
+	httpProxy = proxy.NewHTTPProxy(registry, manager, inspectStore, log)
 
 	// Context for graceful shutdown
 	_, cancel := context.WithCancel(context.Background())

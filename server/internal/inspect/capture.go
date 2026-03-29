@@ -14,6 +14,7 @@ const (
 type CapturedRequest struct {
 	ID             string            `json:"id"`
 	TunnelURL      string            `json:"tunnel_url"`
+	UserID         string            `json:"user_id,omitempty"`
 	Timestamp      time.Time         `json:"timestamp"`
 	Duration       time.Duration     `json:"duration_ms"`
 	Method         string            `json:"method"`

@@ -171,6 +171,7 @@ func (p *HTTPProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		captured := &inspect.CapturedRequest{
 			TunnelURL:       tun.URL,
+			UserID:          tun.UserID,
 			Timestamp:       start,
 			Duration:        duration / time.Millisecond,
 			Method:          r.Method,

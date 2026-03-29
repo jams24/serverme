@@ -12,12 +12,14 @@ import {
   Settings,
   LogOut,
   Waypoints,
+  BarChart3,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useRouter } from "next/navigation";
 
 const navItems = [
   { href: "/tunnels", icon: Waypoints, label: "Tunnels" },
+  { href: "/analytics", icon: BarChart3, label: "Analytics" },
   { href: "/domains", icon: Globe, label: "Domains" },
   { href: "/inspector", icon: Eye, label: "Inspector" },
   { href: "/api-keys", icon: Key, label: "API Keys" },

@@ -90,6 +90,9 @@ func NewRouter(database *db.DB, jwtMgr *auth.JWTManager, registry *tunnel.Regist
 			r.Get("/tunnels/{url}/requests/{reqId}", s.handleGetRequest)
 			r.Post("/tunnels/{url}/replay/{reqId}", s.handleReplayRequest)
 
+			// Analytics
+			r.Get("/analytics", s.handleAnalytics)
+
 			// Reserved Subdomains
 			r.Post("/subdomains", s.handleReserveSubdomain)
 		})

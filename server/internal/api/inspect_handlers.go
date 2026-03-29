@@ -3,6 +3,9 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
+
+	"github.com/serverme/serverme/server/internal/auth"
 	"net/url"
 
 	"github.com/go-chi/chi/v5"
@@ -118,4 +121,29 @@ func (s *Server) handleTrafficWebSocket(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 	}
+}
+
+// handleAnalytics returns analytics overview for the authenticated user.
+func (s *Server) handleAnalytics(w http.ResponseWriter, r *http.Request) {
+	u := auth.GetUser(r)
+	if s.db == nil {
+		writeError(w, http.StatusServiceUnavailable, "analytics requires database")
+		return
+	}
+
+	hours := 24
+	if h := r.URL.Query().Get("hours"); h != "" {
+		if parsed, err := strconv.Atoi(h); err == nil && parsed > 0 {
+			hours = parsed
+		}
+	}
+
+	analytics, err := s.db.GetAnalytics(r.Context(), u.ID, hours)
+	if err != nil {
+		s.log.Error().Err(err).Msg("analytics query failed")
+		writeError(w, http.StatusInternalServerError, "analytics query failed")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, analytics)
 }
