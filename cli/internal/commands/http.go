@@ -93,7 +93,16 @@ func resolveToken() string {
 	if t := loadSavedToken(); t != "" {
 		return t
 	}
-	return "dev-token"
+	fmt.Println()
+	fmt.Printf("  %s No authtoken set.\n", c(red, "ERROR"))
+	fmt.Println()
+	fmt.Printf("  Sign up at %s and get your token,\n", c(cyan, "https://serverme.site/sign-up"))
+	fmt.Printf("  then run:\n")
+	fmt.Println()
+	fmt.Printf("    %s\n", c(white, "serverme authtoken <your-token>"))
+	fmt.Println()
+	os.Exit(1)
+	return ""
 }
 
 func waitForShutdown(cl *client.Client) error {

@@ -34,7 +34,7 @@ Examples:
 	}
 
 	// Global flags
-	root.PersistentFlags().StringVarP(&serverAddr, "server", "s", "localhost:8443", "ServerMe server address")
+	root.PersistentFlags().StringVarP(&serverAddr, "server", "s", "serverme.site:8443", "ServerMe server address")
 	root.PersistentFlags().StringVar(&authToken, "authtoken", "", "Authentication token")
 	root.PersistentFlags().BoolVar(&tlsSkip, "tls-skip-verify", false, "Skip TLS certificate verification")
 	root.PersistentFlags().StringVar(&logLevel, "log-level", "info", "Log level (debug, info, warn, error)")
@@ -45,6 +45,8 @@ Examples:
 	root.AddCommand(NewTLSCmd())
 	root.AddCommand(NewStartCmd())
 	root.AddCommand(NewStatusCmd())
+	root.AddCommand(NewLoginCmd())
+	root.AddCommand(NewLoginEmailCmd())
 	root.AddCommand(NewAuthTokenCmd())
 	root.AddCommand(NewVersionCmd())
 
