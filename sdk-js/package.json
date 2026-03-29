@@ -1,0 +1,41 @@
+{
+  "name": "@serverme/sdk",
+  "version": "1.0.0",
+  "description": "JavaScript/TypeScript SDK for ServerMe tunneling platform",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "node --test tests/",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "serverme",
+    "tunnel",
+    "ngrok",
+    "localhost",
+    "sdk"
+  ],
+  "author": "ServerMe",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jams24/serverme"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.5.0"
+  }
+}

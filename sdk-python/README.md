@@ -1,0 +1,97 @@
+# serverme
+
+Official Python SDK for [ServerMe](https://serverme.dev) — open-source tunneling platform.
+
+## Install
+
+```bash
+pip install serverme
+```
+
+## Quick Start
+
+```python
+import asyncio
+from serverme import ServerMe
+
+async def main():
+    async with ServerMe(authtoken="sm_live_...") as client:
+        # List active tunnels
+        tunnels = await client.tunnels.list()
+        print(tunnels)
+
+        # Get captured requests
+        requests = await client.inspect.list(tunnels[0].url)
+        for req in requests:
+            print(f"{req.method} {req.path} -> {req.status_code} ({req.duration_ms}ms)")
+
+asyncio.run(main())
+```
+
+## Live Traffic Streaming
+
+```python
+async with ServerMe(authtoken="sm_live_...") as client:
+    async for req in client.inspect.subscribe("https://abc123.serverme.dev"):
+        print(f"{req.method} {req.path} -> {req.status_code}")
+```
+
+## API Keys
+
+```python
+async with ServerMe(authtoken="sm_live_...") as client:
+    # List keys
+    keys = await client.api_keys.list()
+
+    # Create a new key
+    full_token, info = await client.api_keys.create("my-app")
+    print(full_token)  # sm_live_... (save this!)
+
+    # Delete a key
+    await client.api_keys.delete(info.id)
+```
+
+## Custom Domains
+
+```python
+async with ServerMe(authtoken="sm_live_...") as client:
+    # Add a domain
+    domain, instructions = await client.domains.create("api.example.com")
+    print(f"Add CNAME: {instructions['name']} -> {instructions['target']}")
+
+    # Verify DNS
+    result = await client.domains.verify(domain.id)
+    print(result)
+
+    # List domains
+    domains = await client.domains.list()
+```
+
+## Error Handling
+
+```python
+from serverme import ServerMe, AuthError, RateLimitError, ApiError
+
+try:
+    async with ServerMe(authtoken="invalid") as client:
+        await client.tunnels.list()
+except AuthError:
+    print("Bad token")
+except RateLimitError as e:
+    print(f"Rate limited, retry in {e.retry_after}s")
+except ApiError as e:
+    print(f"API error {e.status_code}: {e}")
+```
+
+## Self-Hosted
+
+```python
+client = ServerMe(
+    authtoken="sm_live_...",
+    server_url="https://tunnel.mycompany.com",
+)
+```
+
+## License
+
+MIT
