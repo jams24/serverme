@@ -52,3 +52,5 @@ web/.next/
 web/node_modules/
 go.work.sum
 .github/
+INFRASTRUCTURE.md
+PROGRESS.md
