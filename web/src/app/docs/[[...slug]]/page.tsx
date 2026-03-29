@@ -2,11 +2,37 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { use, useState } from "react";
+import { use, useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { categories, getDoc, type DocPage } from "@/lib/docs";
+import {
+  categories,
+  getDoc,
+  getAdjacentPages,
+  type DocPage,
+} from "@/lib/docs";
 import { Navbar } from "@/components/marketing/navbar";
-import { Terminal, ChevronRight, ExternalLink, Copy, Check } from "lucide-react";
+import {
+  Terminal,
+  ChevronRight,
+  ExternalLink,
+  Copy,
+  Check,
+  Rocket,
+  Code,
+  Package,
+  BookOpen,
+  ArrowLeft,
+  ArrowRight,
+  Hash,
+} from "lucide-react";
+
+const categoryIcons: Record<string, React.ReactNode> = {
+  rocket: <Rocket className="h-4 w-4" />,
+  terminal: <Terminal className="h-4 w-4" />,
+  code: <Code className="h-4 w-4" />,
+  package: <Package className="h-4 w-4" />,
+  book: <BookOpen className="h-4 w-4" />,
+};
 
 export default function DocsPage({
   params,
@@ -15,82 +41,202 @@ export default function DocsPage({
 }) {
   const { slug } = use(params);
   const pathname = usePathname();
-  const docSlug = slug?.join("/") || "quickstart";
+  const docSlug = slug?.join("/") || "introduction";
   const doc = getDoc(docSlug);
+  const adjacent = getAdjacentPages(docSlug);
 
   return (
     <>
       <Navbar />
-      <div className="mx-auto flex max-w-7xl">
+      <div className="mx-auto flex max-w-[1400px]">
         {/* Sidebar */}
-        <aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-64 shrink-0 overflow-y-auto border-r border-border/40 px-4 py-8 lg:block">
-          {categories.map((cat) => (
-            <div key={cat.name} className="mb-6">
-              <h3 className="mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                {cat.name}
-              </h3>
-              <ul className="space-y-0.5">
-                {cat.pages.map((page) => {
-                  const href = `/docs/${page.slug}`;
-                  const active =
-                    pathname === href ||
-                    (page.slug === "quickstart" && pathname === "/docs");
-                  return (
-                    <li key={page.slug}>
-                      <Link
-                        href={href}
-                        className={cn(
-                          "flex items-center rounded-md px-2 py-1.5 text-sm transition-colors",
-                          active
-                            ? "bg-primary/10 text-primary font-medium"
-                            : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                        )}
-                      >
-                        {page.title}
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
+        <aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-72 shrink-0 overflow-y-auto border-r border-border/40 py-8 lg:block">
+          <div className="px-4">
+            {categories.map((cat) => (
+              <div key={cat.name} className="mb-6">
+                <h3 className="flex items-center gap-2 mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  {categoryIcons[cat.icon]}
+                  {cat.name}
+                </h3>
+                <ul className="space-y-0.5">
+                  {cat.pages.map((page) => {
+                    const href = `/docs/${page.slug}`;
+                    const active =
+                      pathname === href ||
+                      (page.slug === "introduction" && pathname === "/docs");
+                    return (
+                      <li key={page.slug}>
+                        <Link
+                          href={href}
+                          className={cn(
+                            "flex items-center rounded-lg px-3 py-1.5 text-[13px] transition-colors",
+                            active
+                              ? "bg-primary/10 text-primary font-medium"
+                              : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                          )}
+                        >
+                          {page.title}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </div>
         </aside>
 
         {/* Content */}
-        <main className="min-w-0 flex-1 px-8 py-8 lg:px-16">
+        <main className="min-w-0 flex-1 px-8 py-8 lg:px-16 lg:py-12">
           {doc ? (
-            <DocContent doc={doc} />
+            <>
+              {/* Breadcrumb */}
+              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-6">
+                <Link href="/docs" className="hover:text-foreground">
+                  Docs
+                </Link>
+                <ChevronRight className="h-3 w-3" />
+                <span className="text-foreground">{doc.category}</span>
+                <ChevronRight className="h-3 w-3" />
+                <span className="text-foreground">{doc.title}</span>
+              </div>
+
+              <DocContent doc={doc} />
+
+              {/* Prev/Next Navigation */}
+              <div className="mt-16 flex items-stretch gap-4 border-t border-border/40 pt-8">
+                {adjacent.prev ? (
+                  <Link
+                    href={`/docs/${adjacent.prev.slug}`}
+                    className="group flex flex-1 flex-col rounded-xl border border-border/60 p-5 transition-colors hover:border-primary/30 hover:bg-accent/20"
+                  >
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <ArrowLeft className="h-3 w-3" />
+                      Previous
+                    </span>
+                    <span className="mt-1 text-sm font-medium group-hover:text-primary">
+                      {adjacent.prev.title}
+                    </span>
+                  </Link>
+                ) : (
+                  <div className="flex-1" />
+                )}
+                {adjacent.next ? (
+                  <Link
+                    href={`/docs/${adjacent.next.slug}`}
+                    className="group flex flex-1 flex-col items-end rounded-xl border border-border/60 p-5 transition-colors hover:border-primary/30 hover:bg-accent/20"
+                  >
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      Next
+                      <ArrowRight className="h-3 w-3" />
+                    </span>
+                    <span className="mt-1 text-sm font-medium group-hover:text-primary">
+                      {adjacent.next.title}
+                    </span>
+                  </Link>
+                ) : (
+                  <div className="flex-1" />
+                )}
+              </div>
+            </>
           ) : (
             <div className="text-center py-20">
               <h1 className="text-2xl font-bold">Page not found</h1>
               <p className="mt-2 text-muted-foreground">
-                This documentation page doesn&apos;t exist yet.
+                This page doesn&apos;t exist yet.
               </p>
               <Link
-                href="/docs/quickstart"
+                href="/docs/introduction"
                 className="mt-4 inline-flex items-center gap-1 text-primary hover:underline"
               >
-                Go to Quickstart
+                Go to Introduction
                 <ChevronRight className="h-4 w-4" />
               </Link>
             </div>
           )}
         </main>
+
+        {/* Table of Contents */}
+        {doc && <TableOfContents content={doc.content} />}
       </div>
     </>
+  );
+}
+
+function TableOfContents({ content }: { content: string }) {
+  const [headings, setHeadings] = useState<{ id: string; text: string; level: number }[]>([]);
+  const [active, setActive] = useState("");
+
+  useEffect(() => {
+    const h = content
+      .split("\n")
+      .filter((l) => l.startsWith("## ") || l.startsWith("### "))
+      .map((l) => {
+        const level = l.startsWith("### ") ? 3 : 2;
+        const text = l.replace(/^#{2,3}\s+/, "");
+        const id = text.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+        return { id, text, level };
+      });
+    setHeadings(h);
+  }, [content]);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            setActive(entry.target.id);
+          }
+        }
+      },
+      { rootMargin: "-80px 0px -80% 0px" }
+    );
+
+    headings.forEach((h) => {
+      const el = document.getElementById(h.id);
+      if (el) observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, [headings]);
+
+  if (headings.length < 2) return null;
+
+  return (
+    <aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-56 shrink-0 overflow-y-auto py-12 xl:block">
+      <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        On this page
+      </h4>
+      <ul className="space-y-1">
+        {headings.map((h) => (
+          <li key={h.id}>
+            <a
+              href={`#${h.id}`}
+              className={cn(
+                "block text-xs py-1 transition-colors",
+                h.level === 3 ? "pl-3" : "",
+                active === h.id
+                  ? "text-primary font-medium"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {h.text}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </aside>
   );
 }
 
 function DocContent({ doc }: { doc: DocPage }) {
   return (
     <article>
-      <div className="mb-8">
-        <p className="text-sm text-muted-foreground mb-1">{doc.category}</p>
-        <h1 className="text-3xl font-bold tracking-tight">{doc.title}</h1>
-        <p className="mt-2 text-lg text-muted-foreground">{doc.description}</p>
-      </div>
-
-      <div className="prose prose-invert max-w-none">
+      <h1 className="text-3xl font-bold tracking-tight">{doc.title}</h1>
+      <p className="mt-3 text-lg text-muted-foreground leading-relaxed">
+        {doc.description}
+      </p>
+      <div className="mt-10">
         <MarkdownRenderer content={doc.content} />
       </div>
     </article>
@@ -101,11 +247,10 @@ function MarkdownRenderer({ content }: { content: string }) {
   const blocks = content.split("\n\n");
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {blocks.map((block, i) => {
         const trimmed = block.trim();
 
-        // Code blocks
         if (trimmed.startsWith("```")) {
           const lines = trimmed.split("\n");
           const lang = lines[0].replace("```", "").trim();
@@ -113,23 +258,52 @@ function MarkdownRenderer({ content }: { content: string }) {
           return <CodeBlock key={i} lang={lang} code={code} />;
         }
 
-        // Headings
         if (trimmed.startsWith("## ")) {
+          const text = trimmed.replace("## ", "");
+          const id = text.toLowerCase().replace(/[^a-z0-9]+/g, "-");
           return (
-            <h2 key={i} className="text-xl font-bold mt-10 mb-2">
-              {trimmed.replace("## ", "")}
+            <h2
+              key={i}
+              id={id}
+              className="group flex items-center gap-2 text-xl font-bold mt-12 mb-2 scroll-mt-20"
+            >
+              {text}
+              <a href={`#${id}`} className="opacity-0 group-hover:opacity-50 transition-opacity">
+                <Hash className="h-4 w-4" />
+              </a>
             </h2>
           );
         }
+
         if (trimmed.startsWith("### ")) {
+          const text = trimmed.replace("### ", "");
+          const id = text.toLowerCase().replace(/[^a-z0-9]+/g, "-");
           return (
-            <h3 key={i} className="text-lg font-semibold mt-8 mb-2">
-              {trimmed.replace("### ", "")}
+            <h3
+              key={i}
+              id={id}
+              className="group flex items-center gap-2 text-base font-semibold mt-8 mb-2 scroll-mt-20"
+            >
+              {text}
+              <a href={`#${id}`} className="opacity-0 group-hover:opacity-50 transition-opacity">
+                <Hash className="h-3.5 w-3.5" />
+              </a>
             </h3>
           );
         }
 
-        // Tables
+        if (trimmed.startsWith("> ")) {
+          const text = trimmed.replace(/^>\s*/gm, "");
+          return (
+            <div
+              key={i}
+              className="rounded-lg border-l-4 border-primary/50 bg-primary/5 px-5 py-4 text-sm text-foreground/80"
+            >
+              <InlineMarkdown text={text} />
+            </div>
+          );
+        }
+
         if (trimmed.includes("|") && trimmed.includes("---")) {
           const rows = trimmed
             .split("\n")
@@ -145,14 +319,17 @@ function MarkdownRenderer({ content }: { content: string }) {
               .map((c) => c.trim())
           );
           return (
-            <div key={i} className="overflow-x-auto rounded-lg border border-border/60">
+            <div
+              key={i}
+              className="overflow-x-auto rounded-lg border border-border/60"
+            >
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border/60 bg-muted/30">
                     {headers?.map((h, j) => (
                       <th
                         key={j}
-                        className="px-4 py-2 text-left font-medium text-muted-foreground"
+                        className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground"
                       >
                         {h}
                       </th>
@@ -161,9 +338,12 @@ function MarkdownRenderer({ content }: { content: string }) {
                 </thead>
                 <tbody>
                   {body.map((row, j) => (
-                    <tr key={j} className="border-b border-border/30">
+                    <tr
+                      key={j}
+                      className="border-b border-border/30 last:border-0"
+                    >
                       {row.map((cell, k) => (
-                        <td key={k} className="px-4 py-2">
+                        <td key={k} className="px-4 py-2.5 text-sm">
                           <InlineMarkdown text={cell} />
                         </td>
                       ))}
@@ -175,19 +355,6 @@ function MarkdownRenderer({ content }: { content: string }) {
           );
         }
 
-        // Blockquotes
-        if (trimmed.startsWith("> ")) {
-          return (
-            <blockquote
-              key={i}
-              className="border-l-2 border-primary/50 pl-4 text-sm text-muted-foreground italic"
-            >
-              <InlineMarkdown text={trimmed.replace(/^>\s*/gm, "")} />
-            </blockquote>
-          );
-        }
-
-        // Ordered/Unordered lists
         if (trimmed.match(/^(\d+\.|- )/m)) {
           const items = trimmed.split("\n").filter(Boolean);
           const ordered = items[0]?.match(/^\d+\./);
@@ -196,7 +363,7 @@ function MarkdownRenderer({ content }: { content: string }) {
             <Tag
               key={i}
               className={cn(
-                "space-y-1 text-sm text-muted-foreground pl-5",
+                "space-y-2 text-sm text-foreground/80 pl-5 leading-relaxed",
                 ordered ? "list-decimal" : "list-disc"
               )}
             >
@@ -211,10 +378,12 @@ function MarkdownRenderer({ content }: { content: string }) {
           );
         }
 
-        // Paragraphs
         if (trimmed) {
           return (
-            <p key={i} className="text-sm leading-relaxed text-muted-foreground">
+            <p
+              key={i}
+              className="text-sm leading-relaxed text-foreground/80"
+            >
               <InlineMarkdown text={trimmed} />
             </p>
           );
@@ -226,18 +395,53 @@ function MarkdownRenderer({ content }: { content: string }) {
   );
 }
 
+function CodeBlock({ lang, code }: { lang: string; code: string }) {
+  const [copied, setCopied] = useState(false);
+
+  function handleCopy() {
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div className="group relative overflow-hidden rounded-xl border border-border/60 bg-[#0a0a0a]">
+      <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-2">
+        <span className="text-[11px] font-medium text-zinc-500">
+          {lang || "code"}
+        </span>
+        <button
+          onClick={handleCopy}
+          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-zinc-500 transition-all hover:bg-white/5 hover:text-zinc-300"
+        >
+          {copied ? (
+            <>
+              <Check className="h-3 w-3 text-green-400" />
+              <span className="text-green-400">Copied!</span>
+            </>
+          ) : (
+            <>
+              <Copy className="h-3 w-3" />
+              Copy
+            </>
+          )}
+        </button>
+      </div>
+      <pre className="overflow-x-auto p-4 text-[13px] leading-relaxed">
+        <code className="text-zinc-300 font-mono">{code}</code>
+      </pre>
+    </div>
+  );
+}
+
 function InlineMarkdown({ text }: { text: string }) {
-  // Process inline markdown: **bold**, `code`, [links](url)
   const parts: React.ReactNode[] = [];
   let remaining = text;
   let key = 0;
 
   while (remaining.length > 0) {
-    // Bold
     const boldMatch = remaining.match(/\*\*(.+?)\*\*/);
-    // Inline code
     const codeMatch = remaining.match(/`([^`]+)`/);
-    // Link
     const linkMatch = remaining.match(/\[([^\]]+)\]\(([^)]+)\)/);
 
     const matches = [
@@ -254,9 +458,7 @@ function InlineMarkdown({ text }: { text: string }) {
     }
 
     const first = matches[0]!;
-    if (first.index > 0) {
-      parts.push(remaining.slice(0, first.index));
-    }
+    if (first.index > 0) parts.push(remaining.slice(0, first.index));
 
     if (first.type === "bold") {
       parts.push(
@@ -264,17 +466,15 @@ function InlineMarkdown({ text }: { text: string }) {
           {first.match[1]}
         </strong>
       );
-      remaining = remaining.slice(first.index + first.match[0].length);
     } else if (first.type === "code") {
       parts.push(
         <code
           key={key++}
-          className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground"
+          className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[12px] text-foreground"
         >
           {first.match[1]}
         </code>
       );
-      remaining = remaining.slice(first.index + first.match[0].length);
     } else if (first.type === "link") {
       const href = first.match[2];
       const isExternal = href.startsWith("http");
@@ -282,55 +482,17 @@ function InlineMarkdown({ text }: { text: string }) {
         <Link
           key={key++}
           href={href}
-          className="text-primary hover:underline inline-flex items-center gap-0.5"
+          className="text-primary font-medium hover:underline inline-flex items-center gap-0.5"
           {...(isExternal ? { target: "_blank", rel: "noopener" } : {})}
         >
           {first.match[1]}
           {isExternal && <ExternalLink className="h-3 w-3" />}
         </Link>
       );
-      remaining = remaining.slice(first.index + first.match[0].length);
     }
+
+    remaining = remaining.slice(first.index + first.match[0].length);
   }
 
   return <>{parts}</>;
-}
-
-function CodeBlock({ lang, code }: { lang: string; code: string }) {
-  const [copied, setCopied] = useState(false);
-
-  function handleCopy() {
-    navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
-  return (
-    <div className="group relative overflow-hidden rounded-lg border border-border/60 bg-zinc-950">
-      <div className="flex items-center justify-between border-b border-white/10 px-4 py-1.5">
-        <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
-          {lang || "code"}
-        </span>
-        <button
-          onClick={handleCopy}
-          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-zinc-500 transition-colors hover:bg-white/5 hover:text-zinc-300"
-        >
-          {copied ? (
-            <>
-              <Check className="h-3 w-3 text-green-400" />
-              <span className="text-green-400">Copied</span>
-            </>
-          ) : (
-            <>
-              <Copy className="h-3 w-3" />
-              Copy
-            </>
-          )}
-        </button>
-      </div>
-      <pre className="overflow-x-auto p-4 text-sm leading-relaxed">
-        <code className="text-zinc-300 font-mono">{code}</code>
-      </pre>
-    </div>
-  );
 }
