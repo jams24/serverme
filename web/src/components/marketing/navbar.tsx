@@ -9,7 +9,7 @@ const links = [
   { href: "/#features", label: "Features" },
   { href: "/#pricing", label: "Pricing" },
   { href: "/docs", label: "Docs" },
-  { href: "https://github.com/serverme/serverme", label: "GitHub" },
+  { href: "https://github.com/jams24/serverme", label: "GitHub" },
 ];
 
 export function Navbar() {

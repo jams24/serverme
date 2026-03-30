@@ -15,7 +15,7 @@ const footerLinks = {
     { label: "Self-Hosting", href: "/docs/self-hosting" },
   ],
   Company: [
-    { label: "GitHub", href: "https://github.com/serverme/serverme" },
+    { label: "GitHub", href: "https://github.com/jams24/serverme" },
     { label: "Blog", href: "/blog" },
     { label: "Status", href: "/status" },
     { label: "Contact", href: "mailto:hello@serverme.dev" },
