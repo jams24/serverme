@@ -19,28 +19,36 @@ export default function DashboardLayout({
         <Sidebar />
       </div>
 
-      {/* Mobile header */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="flex h-14 items-center justify-between border-b border-border/40 bg-card/50 px-4 md:hidden">
+        {/* Mobile header */}
+        <header className="flex h-14 items-center justify-between border-b border-border/40 bg-background px-4 md:hidden">
           <Link href="/" className="flex items-center gap-2 font-bold">
             <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
               <Terminal className="h-3.5 w-3.5" />
             </div>
             ServerMe
           </Link>
-          <button onClick={() => setMobileOpen(!mobileOpen)} className="text-muted-foreground">
+          <button
+            onClick={() => setMobileOpen(!mobileOpen)}
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent"
+          >
             {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </header>
 
-        {/* Mobile sidebar overlay */}
+        {/* Mobile sidebar */}
         {mobileOpen && (
-          <>
-            <div className="fixed inset-0 z-40 bg-black/50 md:hidden" onClick={() => setMobileOpen(false)} />
-            <div className="fixed inset-y-0 left-0 z-50 w-64 md:hidden" onClick={() => setMobileOpen(false)}>
-              <Sidebar />
+          <div className="fixed inset-0 z-50 md:hidden">
+            {/* Backdrop */}
+            <div
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setMobileOpen(false)}
+            />
+            {/* Sidebar panel */}
+            <div className="relative h-full w-72 bg-background shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <Sidebar onNavigate={() => setMobileOpen(false)} />
             </div>
-          </>
+          </div>
         )}
 
         <main className="flex-1 overflow-y-auto">
