@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Sidebar } from "@/components/dashboard/sidebar";
+import { AuthGuard } from "@/components/dashboard/auth-guard";
 import { Menu, X, Terminal } from "lucide-react";
 import Link from "next/link";
 
@@ -13,6 +14,7 @@ export default function DashboardLayout({
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
+    <AuthGuard>
     <div className="flex h-screen overflow-hidden">
       {/* Desktop sidebar */}
       <div className="hidden md:block">
@@ -56,5 +58,6 @@ export default function DashboardLayout({
         </main>
       </div>
     </div>
+    </AuthGuard>
   );
 }
