@@ -1,12 +1,15 @@
 package client
 
 import (
+	"bufio"
 	"crypto/rand"
 	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -301,27 +304,49 @@ func (c *Client) handleReqProxy() {
 
 	proxyStart := time.Now()
 
-	c.log.Debug().
-		Str("url", start.URL).
-		Str("local", localAddr).
-		Str("client", start.ClientAddr).
-		Msg("proxying connection")
+	// Sniff the HTTP request line from the stream before forwarding
+	var method, path, statusLine string
+	var statusCode int
 
-	// Bidirectional copy
+	// Use a buffered reader to peek at the HTTP request
+	bufStream := bufio.NewReaderSize(stream, 4096)
+	firstLine, err := bufStream.ReadString('\n')
+	if err == nil {
+		parts := strings.SplitN(strings.TrimSpace(firstLine), " ", 3)
+		if len(parts) >= 2 {
+			method = parts[0]
+			path = parts[1]
+		}
+	}
+
+	// Write the peeked data + rest to local
 	var wg sync.WaitGroup
 	wg.Add(2)
 
+	// stream → local (request)
 	go func() {
 		defer wg.Done()
-		io.Copy(local, stream)
+		local.Write([]byte(firstLine))
+		io.Copy(local, bufStream)
 		if tc, ok := local.(*net.TCPConn); ok {
 			tc.CloseWrite()
 		}
 	}()
 
+	// local → stream (response) — sniff status code
 	go func() {
 		defer wg.Done()
-		io.Copy(stream, local)
+		bufLocal := bufio.NewReaderSize(local, 4096)
+		respLine, err := bufLocal.ReadString('\n')
+		if err == nil {
+			statusLine = strings.TrimSpace(respLine)
+			parts := strings.SplitN(statusLine, " ", 3)
+			if len(parts) >= 2 {
+				fmt.Sscanf(parts[1], "%d", &statusCode)
+			}
+		}
+		stream.Write([]byte(respLine))
+		io.Copy(stream, bufLocal)
 		stream.Close()
 	}()
 
@@ -330,13 +355,70 @@ func (c *Client) handleReqProxy() {
 
 	duration := time.Since(proxyStart)
 
+	// Print request log to terminal
+	if method != "" {
+		c.printRequestLog(method, path, statusCode, duration)
+	}
+
 	// Notify inspector if attached
 	if c.inspector != nil {
 		c.inspector.AddRequest(&InspectedRequest{
 			TunnelURL:  start.URL,
+			Method:     method,
+			Path:       path,
+			StatusCode: statusCode,
 			RemoteAddr: start.ClientAddr,
 			Duration:   duration,
 		})
+	}
+}
+
+func (c *Client) printRequestLog(method, path string, statusCode int, duration time.Duration) {
+	// Color codes
+	const (
+		reset  = "\033[0m"
+		dim    = "\033[2m"
+		green  = "\033[32m"
+		yellow = "\033[33m"
+		red    = "\033[31m"
+		blue   = "\033[34m"
+		cyan   = "\033[36m"
+		white  = "\033[37m"
+		bold   = "\033[1m"
+	)
+
+	// Status color
+	sc := green
+	if statusCode >= 400 {
+		sc = red
+	} else if statusCode >= 300 {
+		sc = yellow
+	}
+
+	// Method color
+	mc := blue
+	switch method {
+	case "POST":
+		mc = green
+	case "PUT", "PATCH":
+		mc = yellow
+	case "DELETE":
+		mc = red
+	}
+
+	ts := time.Now().Format("15:04:05")
+
+	noColor := os.Getenv("NO_COLOR") != ""
+	if noColor {
+		fmt.Printf("%s %s %s %d %s\n", ts, method, path, statusCode, duration.Round(time.Millisecond))
+	} else {
+		fmt.Printf("%s%s%s %s%-6s%s %s%-30s%s %s%d%s %s%s%s\n",
+			dim, ts, reset,
+			mc+bold, method, reset,
+			white, path, reset,
+			sc+bold, statusCode, reset,
+			dim, duration.Round(time.Millisecond), reset,
+		)
 	}
 }
 
