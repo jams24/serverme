@@ -10,6 +10,7 @@ import (
 	"github.com/serverme/serverme/server/internal/auth"
 	"github.com/serverme/serverme/server/internal/db"
 	"github.com/serverme/serverme/server/internal/inspect"
+	"github.com/serverme/serverme/server/internal/notify"
 	"github.com/serverme/serverme/server/internal/tunnel"
 )
 
@@ -23,23 +24,27 @@ type GoogleOAuthConfig struct {
 
 // Server holds dependencies for API handlers.
 type Server struct {
-	db       *db.DB
-	jwt      *auth.JWTManager
-	registry *tunnel.Registry
-	inspect  *inspect.Store
-	google   *GoogleOAuthConfig
-	log      zerolog.Logger
+	db                  *db.DB
+	jwt                 *auth.JWTManager
+	registry            *tunnel.Registry
+	inspect             *inspect.Store
+	google              *GoogleOAuthConfig
+	telegram            *notify.TelegramBot
+	telegramBotUsername string
+	log                 zerolog.Logger
 }
 
 // NewRouter creates the REST API router.
-func NewRouter(database *db.DB, jwtMgr *auth.JWTManager, registry *tunnel.Registry, inspectStore *inspect.Store, google *GoogleOAuthConfig, log zerolog.Logger) http.Handler {
+func NewRouter(database *db.DB, jwtMgr *auth.JWTManager, registry *tunnel.Registry, inspectStore *inspect.Store, google *GoogleOAuthConfig, telegramBot *notify.TelegramBot, telegramUsername string, log zerolog.Logger) http.Handler {
 	s := &Server{
-		db:       database,
-		jwt:      jwtMgr,
-		registry: registry,
-		inspect:  inspectStore,
-		google:   google,
-		log:      log.With().Str("component", "api").Logger(),
+		db:                  database,
+		jwt:                 jwtMgr,
+		registry:            registry,
+		inspect:             inspectStore,
+		google:              google,
+		telegram:            telegramBot,
+		telegramBotUsername: telegramUsername,
+		log:                 log.With().Str("component", "api").Logger(),
 	}
 
 	r := chi.NewRouter()
@@ -93,10 +98,19 @@ func NewRouter(database *db.DB, jwtMgr *auth.JWTManager, registry *tunnel.Regist
 			// Analytics
 			r.Get("/analytics", s.handleAnalytics)
 
+			// Telegram
+			r.Post("/telegram/link", s.handleTelegramLinkCode)
+			r.Get("/telegram/status", s.handleTelegramStatus)
+			r.Put("/telegram/preferences", s.handleTelegramUpdatePrefs)
+			r.Delete("/telegram", s.handleTelegramDisconnect)
+
 			// Reserved Subdomains
 			r.Post("/subdomains", s.handleReserveSubdomain)
 		})
 	})
+
+	// Telegram webhook (public, no auth — Telegram sends here)
+	r.Post("/api/v1/telegram/webhook", s.handleTelegramWebhook)
 
 	// WebSocket (separate auth via query param)
 	r.Get("/api/v1/ws/traffic/{url}", s.handleTrafficWebSocket)

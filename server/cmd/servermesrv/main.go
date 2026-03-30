@@ -19,6 +19,7 @@ import (
 	"github.com/serverme/serverme/server/internal/control"
 	"github.com/serverme/serverme/server/internal/db"
 	"github.com/serverme/serverme/server/internal/inspect"
+	"github.com/serverme/serverme/server/internal/notify"
 	"github.com/serverme/serverme/server/internal/policy"
 	"github.com/serverme/serverme/server/internal/proxy"
 	"github.com/serverme/serverme/server/internal/tunnel"
@@ -39,6 +40,8 @@ func main() {
 	googleClientID := flag.String("google-client-id", "", "Google OAuth Client ID")
 	googleClientSecret := flag.String("google-client-secret", "", "Google OAuth Client Secret")
 	frontendURL := flag.String("frontend-url", "https://serverme.site", "Frontend URL for OAuth redirects")
+	telegramToken := flag.String("telegram-token", "", "Telegram bot token")
+	telegramBotUsername := flag.String("telegram-bot", "serverme_alerts_bot", "Telegram bot username")
 	logLevel := flag.String("log-level", "info", "Log level (debug, info, warn, error)")
 	flag.Parse()
 
@@ -135,7 +138,19 @@ func main() {
 			log.Info().Msg("Google OAuth enabled")
 		}
 
-		apiRouter := api.NewRouter(database, jwtMgr, registry, inspectStore, googleCfg, log)
+		// Telegram bot
+		var telegramBot *notify.TelegramBot
+		if *telegramToken != "" {
+			telegramBot = notify.NewTelegramBot(*telegramToken, log)
+			webhookURL := fmt.Sprintf("https://api.%s/api/v1/telegram/webhook", *domain)
+			if err := telegramBot.SetWebhook(webhookURL); err != nil {
+				log.Warn().Err(err).Msg("failed to set telegram webhook")
+			} else {
+				log.Info().Msg("Telegram bot enabled")
+			}
+		}
+
+		apiRouter := api.NewRouter(database, jwtMgr, registry, inspectStore, googleCfg, telegramBot, *telegramBotUsername, log)
 		apiServer := &http.Server{
 			Addr:         *apiAddr,
 			Handler:      apiRouter,

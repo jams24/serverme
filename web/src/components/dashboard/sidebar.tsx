@@ -13,6 +13,7 @@ import {
   LogOut,
   Waypoints,
   BarChart3,
+  Bell,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useRouter } from "next/navigation";
@@ -23,6 +24,7 @@ const navItems = [
   { href: "/domains", icon: Globe, label: "Domains" },
   { href: "/inspector", icon: Eye, label: "Inspector" },
   { href: "/api-keys", icon: Key, label: "API Keys" },
+  { href: "/notifications", icon: Bell, label: "Notifications" },
   { href: "/team", icon: Users, label: "Team" },
   { href: "/settings", icon: Settings, label: "Settings" },
 ];
