@@ -110,7 +110,7 @@ func waitForShutdown(cl *client.Client) error {
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
 	errCh := make(chan error, 1)
-	go func() { errCh <- cl.Run() }()
+	go func() { errCh <- cl.RunWithReconnect() }()
 
 	select {
 	case <-sigCh:

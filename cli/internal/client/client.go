@@ -90,7 +90,7 @@ func (c *Client) Connect() error {
 	// Create smux client session
 	smuxConfig := smux.DefaultConfig()
 	smuxConfig.MaxReceiveBuffer = 4 * 1024 * 1024
-	smuxConfig.KeepAliveInterval = 30 * time.Second
+	smuxConfig.KeepAliveInterval = 10 * time.Second
 	smuxConfig.KeepAliveTimeout = 60 * time.Second
 
 	session, err := smux.Client(conn, smuxConfig)
