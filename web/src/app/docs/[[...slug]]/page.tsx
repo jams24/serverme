@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { use, useState, useEffect } from "react";
+import { use, useState, useEffect, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import {
   categories,
@@ -45,49 +45,35 @@ export default function DocsPage({
   const doc = getDoc(docSlug);
   const adjacent = getAdjacentPages(docSlug);
 
+  const [mobileNav, setMobileNav] = useState(false);
+
   return (
     <>
       <Navbar />
       <div className="mx-auto flex max-w-[1400px]">
-        {/* Sidebar */}
+        {/* Desktop Sidebar */}
         <aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-72 shrink-0 overflow-y-auto border-r border-border/40 py-8 lg:block">
-          <div className="px-4">
-            {categories.map((cat) => (
-              <div key={cat.name} className="mb-6">
-                <h3 className="flex items-center gap-2 mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  {categoryIcons[cat.icon]}
-                  {cat.name}
-                </h3>
-                <ul className="space-y-0.5">
-                  {cat.pages.map((page) => {
-                    const href = `/docs/${page.slug}`;
-                    const active =
-                      pathname === href ||
-                      (page.slug === "introduction" && pathname === "/docs");
-                    return (
-                      <li key={page.slug}>
-                        <Link
-                          href={href}
-                          className={cn(
-                            "flex items-center rounded-lg px-3 py-1.5 text-[13px] transition-colors",
-                            active
-                              ? "bg-primary/10 text-primary font-medium"
-                              : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-                          )}
-                        >
-                          {page.title}
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ))}
-          </div>
+          <DocsSidebar pathname={pathname} />
         </aside>
 
         {/* Content */}
-        <main className="min-w-0 flex-1 px-8 py-8 lg:px-16 lg:py-12">
+        <main className="min-w-0 flex-1 px-5 sm:px-8 py-6 sm:py-8 lg:px-16 lg:py-12">
+          {/* Mobile nav toggle */}
+          <button
+            onClick={() => setMobileNav(!mobileNav)}
+            className="mb-4 flex items-center gap-2 rounded-lg border border-border/50 px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-accent lg:hidden"
+          >
+            <BookOpen className="h-3.5 w-3.5" />
+            {doc?.category || "Navigation"}
+            <ChevronRight className={cn("h-3 w-3 transition-transform", mobileNav && "rotate-90")} />
+          </button>
+
+          {/* Mobile nav dropdown */}
+          {mobileNav && (
+            <div className="mb-6 rounded-lg border border-border/40 bg-card/50 p-3 lg:hidden" onClick={() => setMobileNav(false)}>
+              <DocsSidebar pathname={pathname} />
+            </div>
+          )}
           {doc ? (
             <>
               {/* Breadcrumb */}
@@ -104,7 +90,7 @@ export default function DocsPage({
               <DocContent doc={doc} />
 
               {/* Prev/Next Navigation */}
-              <div className="mt-16 flex items-stretch gap-4 border-t border-border/40 pt-8">
+              <div className="mt-10 sm:mt-16 flex flex-col sm:flex-row items-stretch gap-3 sm:gap-4 border-t border-border/40 pt-6 sm:pt-8">
                 {adjacent.prev ? (
                   <Link
                     href={`/docs/${adjacent.prev.slug}`}
@@ -160,6 +146,44 @@ export default function DocsPage({
         {doc && <TableOfContents content={doc.content} />}
       </div>
     </>
+  );
+}
+
+function DocsSidebar({ pathname }: { pathname: string }) {
+  return (
+    <div className="px-1 lg:px-4">
+      {categories.map((cat) => (
+        <div key={cat.name} className="mb-4 lg:mb-6">
+          <h3 className="flex items-center gap-2 mb-1.5 lg:mb-2 px-2 lg:px-3 text-[10px] lg:text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {categoryIcons[cat.icon]}
+            {cat.name}
+          </h3>
+          <ul className="space-y-0.5">
+            {cat.pages.map((page) => {
+              const href = `/docs/${page.slug}`;
+              const active =
+                pathname === href ||
+                (page.slug === "introduction" && pathname === "/docs");
+              return (
+                <li key={page.slug}>
+                  <Link
+                    href={href}
+                    className={cn(
+                      "flex items-center rounded-lg px-2 lg:px-3 py-1.5 text-xs lg:text-[13px] transition-colors",
+                      active
+                        ? "bg-primary/10 text-primary font-medium"
+                        : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                    )}
+                  >
+                    {page.title}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -232,8 +256,8 @@ function TableOfContents({ content }: { content: string }) {
 function DocContent({ doc }: { doc: DocPage }) {
   return (
     <article>
-      <h1 className="text-3xl font-bold tracking-tight">{doc.title}</h1>
-      <p className="mt-3 text-lg text-muted-foreground leading-relaxed">
+      <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{doc.title}</h1>
+      <p className="mt-2 sm:mt-3 text-base sm:text-lg text-muted-foreground leading-relaxed">
         {doc.description}
       </p>
       <div className="mt-10">
