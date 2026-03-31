@@ -150,6 +150,17 @@ func (s *Server) handleGetMe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, user)
 }
 
+func (s *Server) handleDeleteMe(w http.ResponseWriter, r *http.Request) {
+	u := auth.GetUser(r)
+
+	if err := s.db.DeleteUser(r.Context(), u.ID); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to delete account")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
 // --- API Keys ---
 
 func (s *Server) handleListAPIKeys(w http.ResponseWriter, r *http.Request) {

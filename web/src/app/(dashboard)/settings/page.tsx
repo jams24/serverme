@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,9 +11,12 @@ import { Separator } from "@/components/ui/separator";
 import { api, type User } from "@/lib/api";
 
 export default function SettingsPage() {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteText, setDeleteText] = useState("");
 
   useEffect(() => {
     api.getMe().then((u) => {
@@ -82,17 +86,60 @@ export default function SettingsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">Delete Account</p>
-              <p className="text-xs text-muted-foreground">
-                Permanently delete your account and all associated data.
-              </p>
+          {!confirmDelete ? (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Delete Account</p>
+                <p className="text-xs text-muted-foreground">
+                  Permanently delete your account and all associated data.
+                </p>
+              </div>
+              <Button variant="destructive" size="sm" onClick={() => setConfirmDelete(true)}>
+                Delete Account
+              </Button>
             </div>
-            <Button variant="destructive" size="sm">
-              Delete Account
-            </Button>
-          </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="rounded-lg bg-destructive/10 p-4">
+                <p className="text-sm font-medium text-destructive">This action cannot be undone.</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  This will permanently delete your account, API keys, domains, team memberships, and all captured requests.
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Type <strong className="text-foreground">delete my account</strong> to confirm:
+                </p>
+                <Input
+                  value={deleteText}
+                  onChange={(e) => setDeleteText(e.target.value)}
+                  placeholder="delete my account"
+                  className="max-w-xs"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={deleteText !== "delete my account"}
+                  onClick={async () => {
+                    const token = localStorage.getItem("sm_token");
+                    await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8081"}/api/v1/users/me`, {
+                      method: "DELETE",
+                      headers: { Authorization: `Bearer ${token}` },
+                    });
+                    api.logout();
+                    router.push("/");
+                  }}
+                >
+                  Permanently Delete
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => { setConfirmDelete(false); setDeleteText(""); }}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

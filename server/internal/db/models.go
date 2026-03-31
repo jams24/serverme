@@ -121,6 +121,12 @@ func (d *DB) GetUserByID(ctx context.Context, id string) (*User, error) {
 	return &u, nil
 }
 
+// DeleteUser permanently deletes a user and all associated data (cascades via FK).
+func (d *DB) DeleteUser(ctx context.Context, userID string) error {
+	_, err := d.Pool.Exec(ctx, `DELETE FROM users WHERE id = $1`, userID)
+	return err
+}
+
 // CheckPassword verifies a password against the stored hash.
 func (u *User) CheckPassword(password string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)) == nil
