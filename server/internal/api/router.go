@@ -98,6 +98,16 @@ func NewRouter(database *db.DB, jwtMgr *auth.JWTManager, registry *tunnel.Regist
 			// Analytics
 			r.Get("/analytics", s.handleAnalytics)
 
+			// Teams
+			r.Get("/teams", s.handleListTeams)
+			r.Post("/teams", s.handleCreateTeam)
+			r.Get("/teams/{teamId}", s.handleGetTeam)
+			r.Delete("/teams/{teamId}", s.handleDeleteTeam)
+			r.Post("/teams/{teamId}/invite", s.handleInviteMember)
+			r.Post("/invitations/{token}/accept", s.handleAcceptInvitation)
+			r.Delete("/teams/{teamId}/members/{userId}", s.handleRemoveMember)
+			r.Put("/teams/{teamId}/members/{userId}/role", s.handleUpdateMemberRole)
+
 			// Telegram
 			r.Post("/telegram/link", s.handleTelegramLinkCode)
 			r.Get("/telegram/status", s.handleTelegramStatus)
