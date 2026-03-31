@@ -50,14 +50,14 @@ export default function DocsPage({
   return (
     <>
       <Navbar />
-      <div className="mx-auto flex max-w-[1400px]">
+      <div className="mx-auto flex max-w-[1400px] overflow-hidden">
         {/* Desktop Sidebar */}
         <aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-72 shrink-0 overflow-y-auto border-r border-border/40 py-8 lg:block">
           <DocsSidebar pathname={pathname} />
         </aside>
 
         {/* Content */}
-        <main className="min-w-0 flex-1 px-5 sm:px-8 py-6 sm:py-8 lg:px-16 lg:py-12">
+        <main className="min-w-0 flex-1 overflow-hidden px-4 sm:px-8 py-6 sm:py-8 lg:px-16 lg:py-12">
           {/* Mobile nav toggle */}
           <button
             onClick={() => setMobileNav(!mobileNav)}
@@ -345,7 +345,7 @@ function MarkdownRenderer({ content }: { content: string }) {
           return (
             <div
               key={i}
-              className="overflow-x-auto rounded-lg border border-border/60"
+              className="overflow-x-auto rounded-lg border border-border/60 max-w-full -mx-1"
             >
               <table className="w-full text-sm">
                 <thead>
@@ -406,7 +406,7 @@ function MarkdownRenderer({ content }: { content: string }) {
           return (
             <p
               key={i}
-              className="text-sm leading-relaxed text-foreground/80"
+              className="text-sm leading-relaxed text-foreground/80 break-words"
             >
               <InlineMarkdown text={trimmed} />
             </p>
@@ -429,14 +429,14 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
   }
 
   return (
-    <div className="group relative overflow-hidden rounded-xl border border-border/60 bg-[#0a0a0a]">
-      <div className="flex items-center justify-between border-b border-white/[0.06] px-4 py-2">
-        <span className="text-[11px] font-medium text-zinc-500">
+    <div className="group relative rounded-xl border border-border/60 bg-[#0a0a0a] max-w-full">
+      <div className="flex items-center justify-between border-b border-white/[0.06] px-3 sm:px-4 py-2">
+        <span className="text-[10px] sm:text-[11px] font-medium text-zinc-500">
           {lang || "code"}
         </span>
         <button
           onClick={handleCopy}
-          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-zinc-500 transition-all hover:bg-white/5 hover:text-zinc-300"
+          className="flex items-center gap-1 sm:gap-1.5 rounded-md px-2 py-1 text-[10px] sm:text-[11px] text-zinc-500 transition-all hover:bg-white/5 hover:text-zinc-300"
         >
           {copied ? (
             <>
@@ -451,9 +451,11 @@ function CodeBlock({ lang, code }: { lang: string; code: string }) {
           )}
         </button>
       </div>
-      <pre className="overflow-x-auto p-4 text-[13px] leading-relaxed">
-        <code className="text-zinc-300 font-mono">{code}</code>
-      </pre>
+      <div className="overflow-x-auto">
+        <pre className="p-3 sm:p-4 text-[11px] sm:text-[13px] leading-relaxed">
+          <code className="text-zinc-300 font-mono whitespace-pre">{code}</code>
+        </pre>
+      </div>
     </div>
   );
 }
@@ -494,7 +496,7 @@ function InlineMarkdown({ text }: { text: string }) {
       parts.push(
         <code
           key={key++}
-          className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[12px] text-foreground"
+          className="rounded-md bg-muted px-1 sm:px-1.5 py-0.5 font-mono text-[10px] sm:text-[12px] text-foreground break-all"
         >
           {first.match[1]}
         </code>
