@@ -24,12 +24,15 @@ export default function InvitePage({
     if (!savedToken) {
       setStatus("needsLogin");
     } else {
-      // Verify the user is logged in
+      // User is logged in — auto-accept the invite
       api.getMe()
-        .then(() => setStatus("ready"))
+        .then(() => {
+          // Automatically accept
+          acceptInvite();
+        })
         .catch(() => setStatus("needsLogin"));
     }
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function acceptInvite() {
     setStatus("loading");
