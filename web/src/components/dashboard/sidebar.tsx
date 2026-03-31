@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
@@ -33,6 +34,32 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const pathname = usePathname();
   const router = useRouter();
 
+  // Team switcher state
+  const [teams, setTeams] = useState<{ id: string; name: string; role: string }[]>([]);
+  const [activeTeamId, setActiveTeamId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem("sm_token");
+    if (!token) return;
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8081"}/api/v1/teams`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.ok ? r.json() : [])
+      .then((data) => {
+        setTeams(data || []);
+        const saved = localStorage.getItem("sm_team_id");
+        if (saved && data?.some((t: { id: string }) => t.id === saved)) setActiveTeamId(saved);
+      })
+      .catch(() => {});
+  }, []);
+
+  function switchTeam(id: string | null) {
+    setActiveTeamId(id);
+    if (id) localStorage.setItem("sm_team_id", id);
+    else localStorage.removeItem("sm_team_id");
+    window.location.reload(); // Reload to refresh all data with team context
+  }
+
   return (
     <aside className="flex h-full w-full flex-col border-r border-border/40 bg-background shrink-0">
       <div className="flex h-16 items-center gap-2 border-b border-border/40 px-6">
@@ -43,6 +70,22 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           ServerMe
         </Link>
       </div>
+
+      {/* Team Switcher */}
+      {teams.length > 0 && (
+        <div className="border-b border-border/40 p-3">
+          <select
+            value={activeTeamId || "personal"}
+            onChange={(e) => switchTeam(e.target.value === "personal" ? null : e.target.value)}
+            className="w-full h-8 rounded-md border border-input bg-background px-2 text-xs font-medium"
+          >
+            <option value="personal">Personal Account</option>
+            {teams.map((t) => (
+              <option key={t.id} value={t.id}>{t.name} ({t.role})</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <nav className="flex-1 space-y-1 p-3 overflow-y-auto">
         {navItems.map((item) => {

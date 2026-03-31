@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/serverme/serverme/server/internal/auth"
 	"net/url"
 
 	"github.com/go-chi/chi/v5"
@@ -123,11 +122,15 @@ func (s *Server) handleTrafficWebSocket(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-// handleAnalytics returns analytics overview for the authenticated user.
 func (s *Server) handleAnalytics(w http.ResponseWriter, r *http.Request) {
-	u := auth.GetUser(r)
 	if s.db == nil {
 		writeError(w, http.StatusServiceUnavailable, "analytics requires database")
+		return
+	}
+
+	_, userIDs, err := s.getTeamContext(r)
+	if err != nil {
+		writeError(w, http.StatusForbidden, err.Error())
 		return
 	}
 
@@ -138,7 +141,7 @@ func (s *Server) handleAnalytics(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	analytics, err := s.db.GetAnalytics(r.Context(), u.ID, hours)
+	analytics, err := s.db.GetAnalyticsForUsers(r.Context(), userIDs, hours)
 	if err != nil {
 		s.log.Error().Err(err).Msg("analytics query failed")
 		writeError(w, http.StatusInternalServerError, "analytics query failed")

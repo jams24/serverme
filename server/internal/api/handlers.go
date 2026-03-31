@@ -333,17 +333,24 @@ func (s *Server) handleVerifyDomain(w http.ResponseWriter, r *http.Request) {
 // --- Tunnels ---
 
 func (s *Server) handleListTunnels(w http.ResponseWriter, r *http.Request) {
-	u := auth.GetUser(r)
-	tunnels := s.registry.ListByUser(u.ID)
+	_, userIDs, err := s.getTeamContext(r)
+	if err != nil {
+		writeError(w, http.StatusForbidden, err.Error())
+		return
+	}
 
 	var result []map[string]interface{}
-	for _, t := range tunnels {
-		result = append(result, map[string]interface{}{
-			"url":       t.URL,
-			"protocol":  t.Protocol,
-			"name":      t.Name,
-			"client_id": t.ClientID,
-		})
+	for _, uid := range userIDs {
+		tunnels := s.registry.ListByUser(uid)
+		for _, t := range tunnels {
+			result = append(result, map[string]interface{}{
+				"url":       t.URL,
+				"protocol":  t.Protocol,
+				"name":      t.Name,
+				"client_id": t.ClientID,
+				"user_id":   t.UserID,
+			})
+		}
 	}
 
 	if result == nil {

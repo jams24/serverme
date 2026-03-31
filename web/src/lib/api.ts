@@ -3,6 +3,13 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8081";
 class ApiClient {
   private token: string | null = null;
 
+  /** Returns team_id query param if a team is selected */
+  private teamQ(prefix = "?"): string {
+    if (typeof window === "undefined") return "";
+    const teamId = localStorage.getItem("sm_team_id");
+    return teamId ? `${prefix}team_id=${teamId}` : "";
+  }
+
   setToken(token: string | null) {
     this.token = token;
     if (token) {
@@ -112,7 +119,7 @@ class ApiClient {
 
   // Tunnels
   listTunnels() {
-    return this.request<Tunnel[]>("/api/v1/tunnels");
+    return this.request<Tunnel[]>("/api/v1/tunnels" + this.teamQ());
   }
 
   // Inspection

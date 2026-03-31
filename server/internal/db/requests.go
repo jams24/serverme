@@ -205,6 +205,83 @@ func (d *DB) GetAnalytics(ctx context.Context, userID string, hours int) (*Analy
 	return a, nil
 }
 
+// GetAnalyticsForUsers returns combined analytics for multiple users (team context).
+func (d *DB) GetAnalyticsForUsers(ctx context.Context, userIDs []string, hours int) (*AnalyticsOverview, error) {
+	if len(userIDs) == 1 {
+		return d.GetAnalytics(ctx, userIDs[0], hours)
+	}
+	if hours <= 0 {
+		hours = 24
+	}
+	since := time.Now().Add(-time.Duration(hours) * time.Hour)
+
+	a := &AnalyticsOverview{
+		MethodBreakdown: make(map[string]int64),
+		StatusBreakdown: make(map[string]int64),
+	}
+
+	d.Pool.QueryRow(ctx,
+		`SELECT COUNT(*), COALESCE(AVG(duration_ms), 0), COALESCE(SUM(request_size), 0), COALESCE(SUM(response_size), 0),
+		 COUNT(*) FILTER (WHERE status_code >= 200 AND status_code < 400),
+		 COUNT(*) FILTER (WHERE status_code >= 400)
+		 FROM captured_requests WHERE user_id = ANY($1) AND timestamp >= $2`,
+		userIDs, since,
+	).Scan(&a.TotalRequests, &a.AvgDurationMs, &a.TotalBytesIn, &a.TotalBytesOut, &a.SuccessCount, &a.ErrorCount)
+
+	rows, _ := d.Pool.Query(ctx,
+		`SELECT method, COUNT(*) FROM captured_requests WHERE user_id = ANY($1) AND timestamp >= $2 GROUP BY method ORDER BY COUNT(*) DESC`,
+		userIDs, since)
+	if rows != nil {
+		defer rows.Close()
+		for rows.Next() {
+			var m string; var c int64
+			rows.Scan(&m, &c)
+			a.MethodBreakdown[m] = c
+		}
+	}
+
+	rows2, _ := d.Pool.Query(ctx,
+		`SELECT CASE WHEN status_code >= 200 AND status_code < 300 THEN '2xx' WHEN status_code >= 300 AND status_code < 400 THEN '3xx' WHEN status_code >= 400 AND status_code < 500 THEN '4xx' WHEN status_code >= 500 THEN '5xx' ELSE 'other' END, COUNT(*)
+		 FROM captured_requests WHERE user_id = ANY($1) AND timestamp >= $2 GROUP BY 1 ORDER BY 1`,
+		userIDs, since)
+	if rows2 != nil {
+		defer rows2.Close()
+		for rows2.Next() {
+			var s string; var c int64
+			rows2.Scan(&s, &c)
+			a.StatusBreakdown[s] = c
+		}
+	}
+
+	rows3, _ := d.Pool.Query(ctx,
+		`SELECT path, COUNT(*) FROM captured_requests WHERE user_id = ANY($1) AND timestamp >= $2 GROUP BY path ORDER BY COUNT(*) DESC LIMIT 10`,
+		userIDs, since)
+	if rows3 != nil {
+		defer rows3.Close()
+		for rows3.Next() {
+			var pc PathCount
+			rows3.Scan(&pc.Path, &pc.Count)
+			a.TopPaths = append(a.TopPaths, pc)
+		}
+	}
+
+	rows4, _ := d.Pool.Query(ctx,
+		`SELECT date_trunc('hour', timestamp), COUNT(*), COUNT(*) FILTER (WHERE status_code < 400), COUNT(*) FILTER (WHERE status_code >= 400)
+		 FROM captured_requests WHERE user_id = ANY($1) AND timestamp >= $2 GROUP BY 1 ORDER BY 1`,
+		userIDs, since)
+	if rows4 != nil {
+		defer rows4.Close()
+		for rows4.Next() {
+			var tp TimelinePoint; var t time.Time
+			rows4.Scan(&t, &tp.Total, &tp.Success, &tp.Error)
+			tp.Time = t.Format("15:04")
+			a.Timeline = append(a.Timeline, tp)
+		}
+	}
+
+	return a, nil
+}
+
 func scanRequests(rows interface{ Next() bool; Scan(...interface{}) error }) ([]CapturedRequestRow, error) {
 	var result []CapturedRequestRow
 	for rows.Next() {
