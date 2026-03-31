@@ -50,7 +50,7 @@ export default function DocsPage({
   return (
     <>
       <Navbar />
-      <div className="mx-auto flex max-w-[1400px] overflow-hidden">
+      <div className="mx-auto flex w-full max-w-full lg:max-w-[1400px] overflow-hidden">
         {/* Desktop Sidebar */}
         <aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-72 shrink-0 overflow-y-auto border-r border-border/40 py-8 lg:block">
           <DocsSidebar pathname={pathname} />

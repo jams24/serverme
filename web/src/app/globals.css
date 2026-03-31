@@ -128,3 +128,16 @@
     @apply font-sans;
   }
 }
+/* Prevent horizontal overflow on mobile */
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+pre, code, table {
+  max-width: 100%;
+}
+
+pre {
+  overflow-x: auto;
+}
