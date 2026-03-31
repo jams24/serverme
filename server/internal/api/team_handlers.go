@@ -137,6 +137,25 @@ func (s *Server) handleAcceptInvitation(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "accepted"})
 }
 
+func (s *Server) handleCancelInvitation(w http.ResponseWriter, r *http.Request) {
+	u := auth.GetUser(r)
+	teamID := chi.URLParam(r, "teamId")
+	inviteID := chi.URLParam(r, "inviteId")
+
+	role, isMember := s.db.IsTeamMember(r.Context(), teamID, u.ID)
+	if !isMember || (role != "owner" && role != "admin") {
+		writeError(w, http.StatusForbidden, "insufficient permissions")
+		return
+	}
+
+	if err := s.db.DeleteInvitation(r.Context(), inviteID, teamID); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "cancelled"})
+}
+
 // --- Members ---
 
 func (s *Server) handleRemoveMember(w http.ResponseWriter, r *http.Request) {

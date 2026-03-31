@@ -104,6 +104,7 @@ func NewRouter(database *db.DB, jwtMgr *auth.JWTManager, registry *tunnel.Regist
 			r.Get("/teams/{teamId}", s.handleGetTeam)
 			r.Delete("/teams/{teamId}", s.handleDeleteTeam)
 			r.Post("/teams/{teamId}/invite", s.handleInviteMember)
+			r.Delete("/teams/{teamId}/invitations/{inviteId}", s.handleCancelInvitation)
 			r.Post("/invitations/{token}/accept", s.handleAcceptInvitation)
 			r.Delete("/teams/{teamId}/members/{userId}", s.handleRemoveMember)
 			r.Put("/teams/{teamId}/members/{userId}/role", s.handleUpdateMemberRole)

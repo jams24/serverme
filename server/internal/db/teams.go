@@ -163,10 +163,10 @@ func (d *DB) AcceptInvitation(ctx context.Context, token, userID string) error {
 	return err
 }
 
-// ListPendingInvitations returns pending invitations for a team.
+// ListPendingInvitations returns pending invitations for a team (includes token for URL generation).
 func (d *DB) ListPendingInvitations(ctx context.Context, teamID string) ([]TeamInvitation, error) {
 	rows, err := d.Pool.Query(ctx,
-		`SELECT id, team_id, email, role, accepted, created_at, expires_at
+		`SELECT id, team_id, email, role, token, accepted, created_at, expires_at
 		 FROM team_invitations WHERE team_id = $1 AND accepted = false AND expires_at > now()
 		 ORDER BY created_at DESC`, teamID,
 	)
@@ -178,10 +178,25 @@ func (d *DB) ListPendingInvitations(ctx context.Context, teamID string) ([]TeamI
 	var invs []TeamInvitation
 	for rows.Next() {
 		var i TeamInvitation
-		rows.Scan(&i.ID, &i.TeamID, &i.Email, &i.Role, &i.Accepted, &i.CreatedAt, &i.ExpiresAt)
+		rows.Scan(&i.ID, &i.TeamID, &i.Email, &i.Role, &i.Token, &i.Accepted, &i.CreatedAt, &i.ExpiresAt)
 		invs = append(invs, i)
 	}
 	return invs, nil
+}
+
+// DeleteInvitation cancels a pending invitation.
+func (d *DB) DeleteInvitation(ctx context.Context, inviteID, teamID string) error {
+	tag, err := d.Pool.Exec(ctx,
+		`DELETE FROM team_invitations WHERE id = $1 AND team_id = $2 AND accepted = false`,
+		inviteID, teamID,
+	)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("invitation not found")
+	}
+	return nil
 }
 
 // RemoveTeamMember removes a member from a team.

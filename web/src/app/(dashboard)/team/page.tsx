@@ -40,6 +40,7 @@ interface Invitation {
   id: string;
   email: string;
   role: string;
+  token: string;
   created_at: string;
 }
 
@@ -57,7 +58,7 @@ export default function TeamPage() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("member");
   const [inviteURL, setInviteURL] = useState("");
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState("");
   const [loading, setLoading] = useState(true);
 
   const headers = () => {
@@ -127,10 +128,27 @@ export default function TeamPage() {
     } catch {}
   }
 
+  async function cancelInvite(inviteId: string) {
+    if (!selectedTeam) return;
+    try {
+      await fetch(`${API}/api/v1/teams/${selectedTeam.team.id}/invitations/${inviteId}`, {
+        method: "DELETE",
+        headers: headers(),
+      });
+      loadTeam(selectedTeam.team.id);
+    } catch {}
+  }
+
+  function copyLink(url: string, id: string) {
+    navigator.clipboard.writeText(url);
+    setCopied(id);
+    setTimeout(() => setCopied(""), 2000);
+  }
+
   function copyInvite() {
     navigator.clipboard.writeText(inviteURL);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setCopied("new");
+    setTimeout(() => setCopied(""), 2000);
   }
 
   useEffect(() => {
@@ -311,7 +329,7 @@ export default function TeamPage() {
                     <div className="flex items-center gap-2 rounded-md bg-background p-2 font-mono text-xs">
                       <code className="flex-1 truncate">{inviteURL}</code>
                       <Button variant="ghost" size="sm" onClick={copyInvite}>
-                        {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+                        {copied === "new" ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
                       </Button>
                     </div>
                   </div>
@@ -322,12 +340,42 @@ export default function TeamPage() {
                   <div className="mt-4">
                     <p className="text-xs font-medium text-muted-foreground mb-2">Pending Invitations</p>
                     <div className="space-y-2">
-                      {selectedTeam.invitations.map((inv) => (
-                        <div key={inv.id} className="flex items-center justify-between rounded-md bg-muted/30 px-3 py-2 text-sm">
-                          <span className="text-muted-foreground">{inv.email}</span>
-                          <Badge variant="outline" className="text-[10px]">{inv.role}</Badge>
-                        </div>
-                      ))}
+                      {selectedTeam.invitations.map((inv) => {
+                        const url = `https://serverme.site/invite/${inv.token}`;
+                        return (
+                          <div key={inv.id} className="rounded-lg border border-border/50 p-3">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <span className="text-sm">{inv.email}</span>
+                                <Badge variant="outline" className="ml-2 text-[10px]">{inv.role}</Badge>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => copyLink(url, inv.id)}
+                                  className="h-7 px-2 text-xs gap-1"
+                                  title="Copy invite link"
+                                >
+                                  {copied === inv.id ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => cancelInvite(inv.id)}
+                                  className="h-7 px-2 text-destructive hover:text-destructive"
+                                  title="Cancel invitation"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="mt-1.5 flex items-center gap-1 rounded bg-muted/30 px-2 py-1">
+                              <code className="text-[10px] text-muted-foreground truncate flex-1">{url}</code>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
