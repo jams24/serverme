@@ -55,17 +55,18 @@ type InspectedRequest struct {
 
 // Client manages the connection to the ServerMe server.
 type Client struct {
-	serverAddr string
-	authToken  string
-	tlsSkip    bool
-	tunnels    []TunnelConfig
-	active     []ActiveTunnel
-	session    *smux.Session
-	ctrlStr    *smux.Stream
-	inspector  RequestInspector
-	log        zerolog.Logger
-	closeCh    chan struct{}
-	closeOnce  sync.Once
+	serverAddr     string
+	authToken      string
+	tlsSkip        bool
+	tunnels        []TunnelConfig
+	active         []ActiveTunnel
+	session        *smux.Session
+	ctrlStr        *smux.Stream
+	inspector      RequestInspector
+	log            zerolog.Logger
+	closeCh        chan struct{}
+	closeOnce      sync.Once
+	userShutdown   bool // true only when Ctrl+C is pressed
 }
 
 // New creates a new tunnel client.
@@ -137,7 +138,7 @@ func (c *Client) Connect() error {
 
 // Run listens for proxy requests until the connection closes.
 func (c *Client) Run() error {
-	defer c.Close()
+	defer c.cleanup()
 
 	for {
 		env, err := proto.ReadMsg(c.ctrlStr)
@@ -176,8 +177,14 @@ func (c *Client) ActiveTunnels() []ActiveTunnel {
 	return c.active
 }
 
-// Close shuts down the client connection.
+// Close shuts down the client connection intentionally (user pressed Ctrl+C).
 func (c *Client) Close() {
+	c.userShutdown = true
+	c.cleanup()
+}
+
+// cleanup closes the connection without marking it as intentional.
+func (c *Client) cleanup() {
 	c.closeOnce.Do(func() {
 		close(c.closeCh)
 		if c.ctrlStr != nil {
@@ -446,32 +453,43 @@ func (c *Client) RunWithReconnect() error {
 
 	for {
 		err := c.Run()
-		if c.isClosed() {
-			return nil // intentional shutdown
+
+		// Only exit if user explicitly pressed Ctrl+C
+		if c.userShutdown {
+			return nil
 		}
 
-		c.log.Warn().Err(err).Msg("disconnected")
+		fmt.Fprintf(os.Stderr, "\n  \033[31m●\033[0m Disconnected: %v\n", err)
 
 		// Reset for reconnect
 		c.closeOnce = sync.Once{}
 		c.closeCh = make(chan struct{})
 		c.active = nil
 
-		wait := backoff.next()
-		c.log.Info().Dur("retry_in", wait).Msg("reconnecting...")
-		time.Sleep(wait)
+		attempt := 0
+		for {
+			attempt++
+			wait := backoff.next()
+			fmt.Fprintf(os.Stderr, "  \033[33m●\033[0m Reconnecting (attempt %d) in %s...\n", attempt, wait.Round(time.Second))
+			time.Sleep(wait)
 
-		if err := c.Connect(); err != nil {
-			c.log.Error().Err(err).Msg("reconnect failed")
-			continue
-		}
+			if c.userShutdown {
+				return nil
+			}
 
-		backoff.reset()
-		c.log.Info().Msg("reconnected successfully")
+			if err := c.Connect(); err != nil {
+				fmt.Fprintf(os.Stderr, "  \033[31m●\033[0m Reconnect failed: %v\n", err)
+				continue
+			}
 
-		// Re-print tunnel info
-		for _, t := range c.active {
-			c.log.Info().Str("url", t.URL).Msg("tunnel re-established")
+			backoff.reset()
+			fmt.Fprintf(os.Stderr, "  \033[32m●\033[0m Reconnected!\n\n")
+
+			for _, t := range c.active {
+				fmt.Fprintf(os.Stderr, "  \033[2mHTTP\033[0m  \033[32;1m%s\033[0m\n", t.URL)
+			}
+			fmt.Fprintln(os.Stderr)
+			break
 		}
 	}
 }
