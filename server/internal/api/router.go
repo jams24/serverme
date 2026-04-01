@@ -118,6 +118,15 @@ func NewRouter(database *db.DB, jwtMgr *auth.JWTManager, registry *tunnel.Regist
 
 			// Reserved Subdomains
 			r.Post("/subdomains", s.handleReserveSubdomain)
+
+			// Admin routes
+			r.Route("/admin", func(r chi.Router) {
+				r.Use(s.adminOnly)
+				r.Get("/stats", s.handleAdminStats)
+				r.Get("/users", s.handleAdminListUsers)
+				r.Put("/users/{userId}", s.handleAdminUpdateUser)
+				r.Delete("/users/{userId}", s.handleAdminDeleteUser)
+			})
 		})
 	})
 

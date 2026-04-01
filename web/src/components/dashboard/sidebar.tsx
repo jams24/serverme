@@ -15,6 +15,7 @@ import {
   Waypoints,
   BarChart3,
   Bell,
+  ShieldCheck,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useRouter } from "next/navigation";
@@ -28,28 +29,35 @@ const navItems = [
   { href: "/notifications", icon: Bell, label: "Notifications" },
   { href: "/team", icon: Users, label: "Team" },
   { href: "/settings", icon: Settings, label: "Settings" },
-];
+  { href: "/admin", icon: ShieldCheck, label: "Admin", adminOnly: true },
+] as const;
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const pathname = usePathname();
   const router = useRouter();
 
-  // Team switcher state
+  const [isAdmin, setIsAdmin] = useState(false);
   const [teams, setTeams] = useState<{ id: string; name: string; role: string }[]>([]);
   const [activeTeamId, setActiveTeamId] = useState<string | null>(null);
 
   useEffect(() => {
     const token = localStorage.getItem("sm_token");
     if (!token) return;
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8081"}/api/v1/teams`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    const base = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8081";
+    const h = { Authorization: `Bearer ${token}` };
+
+    fetch(`${base}/api/v1/teams`, { headers: h })
       .then((r) => r.ok ? r.json() : [])
       .then((data) => {
         setTeams(data || []);
         const saved = localStorage.getItem("sm_team_id");
         if (saved && data?.some((t: { id: string }) => t.id === saved)) setActiveTeamId(saved);
       })
+      .catch(() => {});
+
+    // Check admin status
+    fetch(`${base}/api/v1/admin/stats`, { headers: h })
+      .then((r) => { if (r.ok) setIsAdmin(true); })
       .catch(() => {});
   }, []);
 
@@ -88,7 +96,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
       )}
 
       <nav className="flex-1 space-y-1 p-3 overflow-y-auto">
-        {navItems.map((item) => {
+        {navItems.filter((item) => !("adminOnly" in item && item.adminOnly) || isAdmin).map((item) => {
           const active = pathname.startsWith(item.href);
           return (
             <Link
