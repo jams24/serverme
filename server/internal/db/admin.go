@@ -53,7 +53,7 @@ func (d *DB) AdminListUsers(ctx context.Context, search string, limit, offset in
 		rows, err := d.Pool.Query(ctx,
 			`SELECT u.id, u.email, u.name, u.plan, COALESCE(u.is_admin, false), u.created_at,
 			 (SELECT COUNT(*) FROM api_keys WHERE user_id = u.id),
-			 COALESCE((SELECT COUNT(*) FROM captured_requests WHERE user_id = u.id::text), 0)
+			 COALESCE((SELECT COUNT(*) FROM captured_requests WHERE user_id = u.id), 0)
 			 FROM users u WHERE u.email ILIKE $1 OR u.name ILIKE $1
 			 ORDER BY u.created_at DESC LIMIT $2 OFFSET $3`,
 			pattern, limit, offset,
@@ -69,7 +69,7 @@ func (d *DB) AdminListUsers(ctx context.Context, search string, limit, offset in
 		rows, err := d.Pool.Query(ctx,
 			`SELECT u.id, u.email, u.name, u.plan, COALESCE(u.is_admin, false), u.created_at,
 			 (SELECT COUNT(*) FROM api_keys WHERE user_id = u.id),
-			 COALESCE((SELECT COUNT(*) FROM captured_requests WHERE user_id = u.id::text), 0)
+			 COALESCE((SELECT COUNT(*) FROM captured_requests WHERE user_id = u.id), 0)
 			 FROM users u
 			 ORDER BY u.created_at DESC LIMIT $1 OFFSET $2`,
 			limit, offset,
