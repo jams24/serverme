@@ -52,9 +52,8 @@ export default function BillingPage() {
       if (res.ok) {
         const data = await res.json();
         // Open InventPay invoice page
-        window.open(data.invoice_url, "_blank");
-        // Start polling for payment
-        pollPayment(data.payment_id);
+        // Redirect to payment page
+        window.location.href = data.invoice_url;
       } else {
         const err = await res.json();
         alert(err.error || "Failed to create checkout");
