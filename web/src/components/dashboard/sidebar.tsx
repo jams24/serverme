@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
-import { usePathname } from "next/navigation";
-import { cn } from "@/lib/utils";
+import {
+  useState, useEffect } from "react";
+import {
+  usePathname } from "next/navigation";
+import {
+  cn } from "@/lib/utils";
 import {
   Terminal,
   Globe,
@@ -16,9 +19,12 @@ import {
   BarChart3,
   Bell,
   ShieldCheck,
+  CreditCard,
 } from "lucide-react";
-import { api } from "@/lib/api";
-import { useRouter } from "next/navigation";
+import {
+  api } from "@/lib/api";
+import {
+  useRouter } from "next/navigation";
 
 const navItems = [
   { href: "/tunnels", icon: Waypoints, label: "Tunnels" },
@@ -28,6 +34,7 @@ const navItems = [
   { href: "/api-keys", icon: Key, label: "API Keys" },
   { href: "/notifications", icon: Bell, label: "Notifications" },
   { href: "/team", icon: Users, label: "Team" },
+  { href: "/billing", icon: CreditCard, label: "Billing" },
   { href: "/settings", icon: Settings, label: "Settings" },
   { href: "/admin", icon: ShieldCheck, label: "Admin", adminOnly: true },
 ] as const;

@@ -8,6 +8,7 @@ import (
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/rs/zerolog"
 	"github.com/serverme/serverme/server/internal/auth"
+	"github.com/serverme/serverme/server/internal/billing"
 	"github.com/serverme/serverme/server/internal/db"
 	"github.com/serverme/serverme/server/internal/inspect"
 	"github.com/serverme/serverme/server/internal/notify"
@@ -31,11 +32,12 @@ type Server struct {
 	google              *GoogleOAuthConfig
 	telegram            *notify.TelegramBot
 	telegramBotUsername string
+	billing            *billing.InventPay
 	log                 zerolog.Logger
 }
 
 // NewRouter creates the REST API router.
-func NewRouter(database *db.DB, jwtMgr *auth.JWTManager, registry *tunnel.Registry, inspectStore *inspect.Store, google *GoogleOAuthConfig, telegramBot *notify.TelegramBot, telegramUsername string, log zerolog.Logger) http.Handler {
+func NewRouter(database *db.DB, jwtMgr *auth.JWTManager, registry *tunnel.Registry, inspectStore *inspect.Store, google *GoogleOAuthConfig, telegramBot *notify.TelegramBot, telegramUsername string, billingClient *billing.InventPay, log zerolog.Logger) http.Handler {
 	s := &Server{
 		db:                  database,
 		jwt:                 jwtMgr,
@@ -44,6 +46,7 @@ func NewRouter(database *db.DB, jwtMgr *auth.JWTManager, registry *tunnel.Regist
 		google:              google,
 		telegram:            telegramBot,
 		telegramBotUsername: telegramUsername,
+		billing:            billingClient,
 		log:                 log.With().Str("component", "api").Logger(),
 	}
 
@@ -116,6 +119,11 @@ func NewRouter(database *db.DB, jwtMgr *auth.JWTManager, registry *tunnel.Regist
 			r.Put("/telegram/preferences", s.handleTelegramUpdatePrefs)
 			r.Delete("/telegram", s.handleTelegramDisconnect)
 
+			// Billing
+			r.Post("/billing/checkout", s.handleCreateCheckout)
+			r.Get("/billing/status", s.handleBillingStatus)
+			r.Get("/billing/check", s.handleCheckPayment)
+
 			// Reserved Subdomains
 			r.Post("/subdomains", s.handleReserveSubdomain)
 
@@ -132,6 +140,9 @@ func NewRouter(database *db.DB, jwtMgr *auth.JWTManager, registry *tunnel.Regist
 
 	// Telegram webhook (public, no auth — Telegram sends here)
 	r.Post("/api/v1/telegram/webhook", s.handleTelegramWebhook)
+
+	// Billing webhook (public — InventPay sends here)
+	r.Post("/api/v1/billing/webhook", s.handleBillingWebhook)
 
 	// WebSocket (separate auth via query param)
 	r.Get("/api/v1/ws/traffic/{url}", s.handleTrafficWebSocket)

@@ -18,6 +18,7 @@ import (
 	"github.com/serverme/serverme/server/internal/auth"
 	"github.com/serverme/serverme/server/internal/control"
 	"github.com/serverme/serverme/server/internal/db"
+	"github.com/serverme/serverme/server/internal/billing"
 	"github.com/serverme/serverme/server/internal/inspect"
 	"github.com/serverme/serverme/server/internal/notify"
 	"github.com/serverme/serverme/server/internal/policy"
@@ -41,6 +42,8 @@ func main() {
 	googleClientSecret := flag.String("google-client-secret", "", "Google OAuth Client Secret")
 	frontendURL := flag.String("frontend-url", "https://serverme.site", "Frontend URL for OAuth redirects")
 	telegramToken := flag.String("telegram-token", "", "Telegram bot token")
+	inventpayKey := flag.String("inventpay-key", "", "InventPay API key")
+	inventpayWebhookSecret := flag.String("inventpay-webhook-secret", "", "InventPay webhook secret")
 	telegramBotUsername := flag.String("telegram-bot", "serverme_alerts_bot", "Telegram bot username")
 	logLevel := flag.String("log-level", "info", "Log level (debug, info, warn, error)")
 	flag.Parse()
@@ -150,7 +153,14 @@ func main() {
 			}
 		}
 
-		apiRouter := api.NewRouter(database, jwtMgr, registry, inspectStore, googleCfg, telegramBot, *telegramBotUsername, log)
+		// Billing
+		var billingClient *billing.InventPay
+		if *inventpayKey != "" {
+			billingClient = billing.NewInventPay(*inventpayKey, *inventpayWebhookSecret)
+			log.Info().Msg("InventPay billing enabled")
+		}
+
+		apiRouter := api.NewRouter(database, jwtMgr, registry, inspectStore, googleCfg, telegramBot, *telegramBotUsername, billingClient, log)
 		apiServer := &http.Server{
 			Addr:         *apiAddr,
 			Handler:      apiRouter,
