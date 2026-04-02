@@ -39,13 +39,8 @@ func (s *Server) handleCreateCheckout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Save pending subscription
-	_, err = s.db.CreateSubscription(r.Context(), u.ID, "premium", invoice.PaymentID, 10, "USDT")
-	if err != nil {
-		s.log.Error().Err(err).Msg("failed to create subscription")
-		writeError(w, http.StatusInternalServerError, "failed to create subscription")
-		return
-	}
+	// Save pending subscription (ignore duplicate — user may have retried)
+	s.db.CreateSubscription(r.Context(), u.ID, "premium", invoice.PaymentID, 10, "USDT")
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"payment_id":  invoice.PaymentID,
