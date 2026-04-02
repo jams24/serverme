@@ -92,9 +92,18 @@ func (ip *InventPay) CreateInvoice(req *CreateInvoiceRequest) (*InvoiceResponse,
 		return nil, fmt.Errorf("inventpay error (%d): %s", resp.StatusCode, string(respBody))
 	}
 
-	var result InvoiceResponse
-	json.Unmarshal(respBody, &result)
-	return &result, nil
+	// InventPay wraps response in {"success": true, "data": {...}}
+	var wrapper struct {
+		Success bool            `json:"success"`
+		Data    InvoiceResponse `json:"data"`
+	}
+	json.Unmarshal(respBody, &wrapper)
+
+	if !wrapper.Success {
+		return nil, fmt.Errorf("inventpay: invoice creation failed")
+	}
+
+	return &wrapper.Data, nil
 }
 
 // GetPaymentStatus checks the status of a payment.
