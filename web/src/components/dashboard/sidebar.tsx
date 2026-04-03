@@ -12,6 +12,7 @@ import {
   Globe,
   Key,
   Eye,
+  Link2,
   Users,
   Settings,
   LogOut,
@@ -29,6 +30,7 @@ import {
 const navItems = [
   { href: "/tunnels", icon: Waypoints, label: "Tunnels" },
   { href: "/analytics", icon: BarChart3, label: "Analytics" },
+  { href: "/subdomains", icon: Link2, label: "Subdomains" },
   { href: "/domains", icon: Globe, label: "Domains" },
   { href: "/inspector", icon: Eye, label: "Inspector" },
   { href: "/api-keys", icon: Key, label: "API Keys" },

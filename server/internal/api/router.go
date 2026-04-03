@@ -124,8 +124,11 @@ func NewRouter(database *db.DB, jwtMgr *auth.JWTManager, registry *tunnel.Regist
 			r.Get("/billing/status", s.handleBillingStatus)
 			r.Get("/billing/check", s.handleCheckPayment)
 
-			// Reserved Subdomains
-			r.Post("/subdomains", s.handleReserveSubdomain)
+			// Subdomains
+			r.Get("/subdomains", s.handleListSubdomains)
+			r.Post("/subdomains", s.handleAddSubdomain)
+			r.Delete("/subdomains", s.handleReleaseSubdomain)
+			r.Get("/subdomains/check", s.handleCheckSubdomain)
 
 			// Admin routes
 			r.Route("/admin", func(r chi.Router) {

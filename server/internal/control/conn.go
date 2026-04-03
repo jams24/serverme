@@ -30,10 +30,17 @@ type TCPAllocator interface {
 	CloseAllForClient(clientID string)
 }
 
+// SubdomainChecker validates and reserves subdomains.
+type SubdomainChecker interface {
+	CheckSubdomainAvailable(ctx context.Context, subdomain, userID string) (bool, string)
+	ReserveSubdomainAuto(ctx context.Context, userID, subdomain string) error
+}
+
 // Conn represents a single client's control connection.
 type Conn struct {
-	id           string
-	userID       string // authenticated user ID (empty for dev-token)
+	id               string
+	userID           string // authenticated user ID (empty for dev-token)
+	subdomainChecker SubdomainChecker
 	session      *smux.Session
 	ctrlStr      *smux.Stream // stream 0: control messages
 	registry     *tunnel.Registry
@@ -50,7 +57,7 @@ type Conn struct {
 }
 
 // NewConn creates a control connection from an accepted smux session.
-func NewConn(session *smux.Session, registry *tunnel.Registry, tcpAlloc TCPAllocator, domain, scheme, serverHost string, log zerolog.Logger) (*Conn, error) {
+func NewConn(session *smux.Session, registry *tunnel.Registry, tcpAlloc TCPAllocator, subCheck SubdomainChecker, domain, scheme, serverHost string, log zerolog.Logger) (*Conn, error) {
 	// Accept the first stream as the control stream
 	ctrlStr, err := session.AcceptStream()
 	if err != nil {
@@ -58,16 +65,17 @@ func NewConn(session *smux.Session, registry *tunnel.Registry, tcpAlloc TCPAlloc
 	}
 
 	return &Conn{
-		session:      session,
-		ctrlStr:      ctrlStr,
-		registry:     registry,
-		tcpAllocator: tcpAlloc,
-		domain:       domain,
-		scheme:       scheme,
-		serverHost:   serverHost,
-		log:          log,
-		proxyCh:      make(chan *smux.Stream, 64),
-		closeCh:      make(chan struct{}),
+		session:          session,
+		ctrlStr:          ctrlStr,
+		registry:         registry,
+		tcpAllocator:     tcpAlloc,
+		subdomainChecker: subCheck,
+		domain:           domain,
+		scheme:           scheme,
+		serverHost:       serverHost,
+		log:              log,
+		proxyCh:          make(chan *smux.Stream, 64),
+		closeCh:          make(chan struct{}),
 	}, nil
 }
 
@@ -246,8 +254,26 @@ func (c *Conn) handleReqTunnel(req *proto.ReqTunnel) {
 
 func (c *Conn) handleHTTPTunnel(req *proto.ReqTunnel) {
 	subdomain := req.Subdomain
+	isCustom := subdomain != ""
 	if subdomain == "" {
 		subdomain = tunnel.GenerateSubdomain()
+	}
+
+	// Check subdomain availability for custom subdomains
+	if isCustom && c.userID != "" && c.subdomainChecker != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		available, reason := c.subdomainChecker.CheckSubdomainAvailable(ctx, subdomain, c.userID)
+		if !available {
+			proto.WriteMsg(c.ctrlStr, proto.TypeNewTunnel, &proto.NewTunnel{
+				Error: reason,
+			})
+			return
+		}
+
+		// Auto-reserve the subdomain
+		c.subdomainChecker.ReserveSubdomainAuto(ctx, c.userID, subdomain)
 	}
 
 	hostname := subdomain + "." + c.domain

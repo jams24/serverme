@@ -255,7 +255,7 @@ func handleClient(conn net.Conn, smuxConfig *smux.Config, authToken, domain, sch
 		return
 	}
 
-	ctrlConn, err := control.NewConn(session, registry, tcpProxy, domain, scheme, serverHost, clientLog)
+	ctrlConn, err := control.NewConn(session, registry, tcpProxy, database, domain, scheme, serverHost, clientLog)
 	if err != nil {
 		clientLog.Error().Err(err).Msg("control connection error")
 		session.Close()
