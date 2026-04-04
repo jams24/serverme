@@ -116,12 +116,22 @@ function ProjectsContent() {
 
     if (res.ok) {
       const project = await res.json();
-      // Link GitHub repo
+      // Set repo URL and GitHub repo link
       await fetch(`${API}/api/v1/projects/${project.id}`, {
         method: "PUT", headers: headers(),
-        body: JSON.stringify({ repo_url: repo.html_url + ".git", branch: repo.default_branch }),
+        body: JSON.stringify({
+          repo_url: repo.html_url + ".git",
+          branch: repo.default_branch || "main",
+          github_repo: repo.full_name,
+        }),
+      });
+      // Auto-deploy
+      await fetch(`${API}/api/v1/projects/${project.id}/deploy`, {
+        method: "POST", headers: headers(),
       });
       setShowRepoPicker(false);
+      setDeploying(project.id);
+      setTimeout(() => setDeploying(null), 5000);
       load();
     }
   }

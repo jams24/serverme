@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/serverme/serverme/server/internal/auth"
@@ -79,11 +80,12 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		RepoURL  string            `json:"repo_url"`
-		Branch   string            `json:"branch"`
-		BuildCmd string            `json:"build_cmd"`
-		StartCmd string            `json:"start_cmd"`
-		EnvVars  map[string]string `json:"env_vars"`
+		RepoURL    string            `json:"repo_url"`
+		Branch     string            `json:"branch"`
+		BuildCmd   string            `json:"build_cmd"`
+		StartCmd   string            `json:"start_cmd"`
+		EnvVars    map[string]string `json:"env_vars"`
+		GitHubRepo string            `json:"github_repo"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request")
@@ -98,6 +100,10 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.db.UpdateProjectConfig(r.Context(), projectID, req.RepoURL, req.Branch, req.BuildCmd, req.StartCmd, req.EnvVars)
+
+	if req.GitHubRepo != "" {
+		s.db.UpdateProjectGitHub(r.Context(), projectID, req.GitHubRepo, req.Branch, true)
+	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 }
 
@@ -116,7 +122,16 @@ func (s *Server) handleDeployProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Deploy async — use background context since HTTP request ends immediately
+	// For private repos, inject GitHub token into clone URL
+	if s.deployer.GitHub != nil {
+		gc, _ := s.db.GetGitHubConnection(r.Context(), u.ID)
+		if gc != nil && project.RepoURL != "" {
+			// Replace https://github.com/... with https://TOKEN@github.com/...
+			project.RepoURL = s.deployer.GitHub.GetCloneURL(gc.AccessToken, extractRepoFullName(project.RepoURL))
+		}
+	}
+
+	// Deploy async
 	go func() {
 		ctx := context.Background()
 		if err := s.deployer.Deploy(ctx, project); err != nil {
@@ -177,4 +192,15 @@ func (s *Server) handleGetDeployLogs(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, []struct{}{}); return
 	}
 	writeJSON(w, http.StatusOK, logs)
+}
+
+// extractRepoFullName extracts "user/repo" from a GitHub URL.
+func extractRepoFullName(repoURL string) string {
+	// Handle https://github.com/user/repo.git
+	s := repoURL
+	s = strings.TrimPrefix(s, "https://github.com/")
+	s = strings.TrimPrefix(s, "http://github.com/")
+	s = strings.TrimSuffix(s, ".git")
+	s = strings.TrimSuffix(s, "/")
+	return s
 }
