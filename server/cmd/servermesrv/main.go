@@ -182,6 +182,7 @@ func main() {
 			}
 			deployEngine = deploy.NewEngine(database, *domain, githubApp, log)
 			log.Info().Msg("Deploy engine enabled")
+			httpProxy.SetProjectLookup(deployEngine)
 		}
 
 		apiRouter := api.NewRouter(database, jwtMgr, registry, inspectStore, googleCfg, telegramBot, *telegramBotUsername, billingClient, deployEngine, log)

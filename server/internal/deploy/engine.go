@@ -226,3 +226,24 @@ func (e *Engine) logMsg(ctx context.Context, projectID, message, level string) {
 	e.db.AddDeployLog(ctx, projectID, message, level)
 	e.log.Info().Str("project", projectID).Str("level", level).Msg(message)
 }
+
+// GetProjectPort returns the container port for a deployed project by subdomain.
+// Implements proxy.ProjectLookup interface.
+func (e *Engine) GetProjectPort(subdomain string) (int, bool) {
+	ctx := context.Background()
+	rows, err := e.db.Pool.Query(ctx,
+		`SELECT container_port FROM projects WHERE subdomain = $1 AND status = 'running' AND container_port > 0`,
+		subdomain,
+	)
+	if err != nil {
+		return 0, false
+	}
+	defer rows.Close()
+
+	if rows.Next() {
+		var port int
+		rows.Scan(&port)
+		return port, port > 0
+	}
+	return 0, false
+}

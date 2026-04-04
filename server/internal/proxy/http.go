@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httputil"
 	"strings"
 	"time"
 
@@ -19,11 +20,17 @@ import (
 
 const maxBodyCapture = 10 * 1024 // 10KB
 
+// ProjectLookup finds deployed projects by subdomain.
+type ProjectLookup interface {
+	GetProjectPort(subdomain string) (int, bool)
+}
+
 // HTTPProxy handles incoming HTTP requests and forwards them through tunnels.
 type HTTPProxy struct {
 	registry *tunnel.Registry
 	manager  *control.Manager
 	store    *inspect.Store
+	projects ProjectLookup
 	log      zerolog.Logger
 }
 
@@ -37,6 +44,11 @@ func NewHTTPProxy(registry *tunnel.Registry, manager *control.Manager, store *in
 	}
 }
 
+// SetProjectLookup sets the project lookup for deployed containers.
+func (p *HTTPProxy) SetProjectLookup(pl ProjectLookup) {
+	p.projects = pl
+}
+
 // ServeHTTP handles an incoming HTTP request by routing it through the appropriate tunnel.
 func (p *HTTPProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
@@ -44,6 +56,26 @@ func (p *HTTPProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	tun := p.registry.LookupByHost(hostname)
 	if tun == nil {
+		// Check if this is a deployed project
+		if p.projects != nil {
+			// Extract subdomain from hostname (e.g., "myapp" from "myapp.serverme.site")
+			parts := strings.SplitN(hostname, ".", 2)
+			if len(parts) >= 1 {
+				if port, ok := p.projects.GetProjectPort(parts[0]); ok {
+					// Reverse proxy to the deployed container
+					proxy := &httputil.ReverseProxy{
+						Director: func(req *http.Request) {
+							req.URL.Scheme = "http"
+							req.URL.Host = fmt.Sprintf("127.0.0.1:%d", port)
+							req.Host = r.Host
+						},
+					}
+					proxy.ServeHTTP(w, r)
+					return
+				}
+			}
+		}
+
 		p.log.Debug().Str("host", hostname).Msg("no tunnel found")
 		http.Error(w, "Tunnel not found. If you're trying to connect, make sure your tunnel is active.", http.StatusNotFound)
 		return
