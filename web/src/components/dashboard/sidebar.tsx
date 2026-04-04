@@ -12,6 +12,7 @@ import {
   Globe,
   Key,
   Eye,
+  Rocket,
   Link2,
   Users,
   Settings,
@@ -28,6 +29,7 @@ import {
   useRouter } from "next/navigation";
 
 const navItems = [
+  { href: "/projects", icon: Rocket, label: "Projects" },
   { href: "/tunnels", icon: Waypoints, label: "Tunnels" },
   { href: "/analytics", icon: BarChart3, label: "Analytics" },
   { href: "/subdomains", icon: Link2, label: "Subdomains" },

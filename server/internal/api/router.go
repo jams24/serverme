@@ -9,6 +9,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/serverme/serverme/server/internal/auth"
 	"github.com/serverme/serverme/server/internal/billing"
+	"github.com/serverme/serverme/server/internal/deploy"
 	"github.com/serverme/serverme/server/internal/db"
 	"github.com/serverme/serverme/server/internal/inspect"
 	"github.com/serverme/serverme/server/internal/notify"
@@ -33,11 +34,12 @@ type Server struct {
 	telegram            *notify.TelegramBot
 	telegramBotUsername string
 	billing            *billing.InventPay
+	deployer           *deploy.Engine
 	log                 zerolog.Logger
 }
 
 // NewRouter creates the REST API router.
-func NewRouter(database *db.DB, jwtMgr *auth.JWTManager, registry *tunnel.Registry, inspectStore *inspect.Store, google *GoogleOAuthConfig, telegramBot *notify.TelegramBot, telegramUsername string, billingClient *billing.InventPay, log zerolog.Logger) http.Handler {
+func NewRouter(database *db.DB, jwtMgr *auth.JWTManager, registry *tunnel.Registry, inspectStore *inspect.Store, google *GoogleOAuthConfig, telegramBot *notify.TelegramBot, telegramUsername string, billingClient *billing.InventPay, deployEngine *deploy.Engine, log zerolog.Logger) http.Handler {
 	s := &Server{
 		db:                  database,
 		jwt:                 jwtMgr,
@@ -47,6 +49,7 @@ func NewRouter(database *db.DB, jwtMgr *auth.JWTManager, registry *tunnel.Regist
 		telegram:            telegramBot,
 		telegramBotUsername: telegramUsername,
 		billing:            billingClient,
+		deployer:           deployEngine,
 		log:                 log.With().Str("component", "api").Logger(),
 	}
 
@@ -123,6 +126,16 @@ func NewRouter(database *db.DB, jwtMgr *auth.JWTManager, registry *tunnel.Regist
 			r.Post("/billing/checkout", s.handleCreateCheckout)
 			r.Get("/billing/status", s.handleBillingStatus)
 			r.Get("/billing/check", s.handleCheckPayment)
+
+			// Deploy / Projects
+			r.Get("/projects", s.handleListProjects)
+			r.Post("/projects", s.handleCreateProject)
+			r.Get("/projects/{projectId}", s.handleGetProject)
+			r.Put("/projects/{projectId}", s.handleUpdateProject)
+			r.Post("/projects/{projectId}/deploy", s.handleDeployProject)
+			r.Post("/projects/{projectId}/stop", s.handleStopProject)
+			r.Delete("/projects/{projectId}", s.handleDeleteProject)
+			r.Get("/projects/{projectId}/logs", s.handleGetDeployLogs)
 
 			// Subdomains
 			r.Get("/subdomains", s.handleListSubdomains)

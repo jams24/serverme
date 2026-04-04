@@ -19,6 +19,7 @@ import (
 	"github.com/serverme/serverme/server/internal/control"
 	"github.com/serverme/serverme/server/internal/db"
 	"github.com/serverme/serverme/server/internal/billing"
+	"github.com/serverme/serverme/server/internal/deploy"
 	"github.com/serverme/serverme/server/internal/inspect"
 	"github.com/serverme/serverme/server/internal/notify"
 	"github.com/serverme/serverme/server/internal/policy"
@@ -160,7 +161,14 @@ func main() {
 			log.Info().Msg("InventPay billing enabled")
 		}
 
-		apiRouter := api.NewRouter(database, jwtMgr, registry, inspectStore, googleCfg, telegramBot, *telegramBotUsername, billingClient, log)
+		// Deploy engine
+		var deployEngine *deploy.Engine
+		if database != nil {
+			deployEngine = deploy.NewEngine(database, *domain, log)
+			log.Info().Msg("Deploy engine enabled")
+		}
+
+		apiRouter := api.NewRouter(database, jwtMgr, registry, inspectStore, googleCfg, telegramBot, *telegramBotUsername, billingClient, deployEngine, log)
 		apiServer := &http.Server{
 			Addr:         *apiAddr,
 			Handler:      apiRouter,
