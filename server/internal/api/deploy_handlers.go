@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
@@ -115,9 +116,10 @@ func (s *Server) handleDeployProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Deploy async
+	// Deploy async — use background context since HTTP request ends immediately
 	go func() {
-		if err := s.deployer.Deploy(r.Context(), project); err != nil {
+		ctx := context.Background()
+		if err := s.deployer.Deploy(ctx, project); err != nil {
 			s.log.Error().Err(err).Str("project", projectID).Msg("deploy failed")
 		}
 	}()
