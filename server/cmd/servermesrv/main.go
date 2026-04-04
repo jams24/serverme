@@ -44,6 +44,11 @@ func main() {
 	frontendURL := flag.String("frontend-url", "https://serverme.site", "Frontend URL for OAuth redirects")
 	telegramToken := flag.String("telegram-token", "", "Telegram bot token")
 	inventpayKey := flag.String("inventpay-key", "", "InventPay API key")
+	githubAppID := flag.String("github-app-id", "", "GitHub App ID")
+	githubClientID := flag.String("github-client-id", "", "GitHub App Client ID")
+	githubClientSecret := flag.String("github-client-secret", "", "GitHub App Client Secret")
+	githubWebhookSecret := flag.String("github-webhook-secret", "", "GitHub App Webhook Secret")
+	githubPrivateKey := flag.String("github-private-key", "", "GitHub App Private Key PEM file path")
 	inventpayWebhookSecret := flag.String("inventpay-webhook-secret", "", "InventPay webhook secret")
 	telegramBotUsername := flag.String("telegram-bot", "serverme_alerts_bot", "Telegram bot username")
 	logLevel := flag.String("log-level", "info", "Log level (debug, info, warn, error)")
@@ -164,7 +169,18 @@ func main() {
 		// Deploy engine
 		var deployEngine *deploy.Engine
 		if database != nil {
-			deployEngine = deploy.NewEngine(database, *domain, log)
+			// GitHub App
+			var githubApp *deploy.GitHubApp
+			if *githubAppID != "" && *githubPrivateKey != "" {
+				var err error
+				githubApp, err = deploy.NewGitHubApp(*githubAppID, *githubClientID, *githubClientSecret, *githubWebhookSecret, *githubPrivateKey, log)
+				if err != nil {
+					log.Warn().Err(err).Msg("GitHub App init failed")
+				} else {
+					log.Info().Msg("GitHub App enabled")
+				}
+			}
+			deployEngine = deploy.NewEngine(database, *domain, githubApp, log)
 			log.Info().Msg("Deploy engine enabled")
 		}
 

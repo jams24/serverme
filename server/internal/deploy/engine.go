@@ -14,15 +14,17 @@ import (
 // Engine handles building and deploying projects as Docker containers.
 type Engine struct {
 	db     *db.DB
-	domain string
+	Domain string
+	GitHub *GitHubApp
 	log    zerolog.Logger
 }
 
 // NewEngine creates a new deploy engine.
-func NewEngine(database *db.DB, domain string, log zerolog.Logger) *Engine {
+func NewEngine(database *db.DB, domain string, github *GitHubApp, log zerolog.Logger) *Engine {
 	return &Engine{
 		db:     database,
-		domain: domain,
+		Domain: domain,
+		GitHub: github,
 		log:    log.With().Str("component", "deploy").Logger(),
 	}
 }
@@ -115,7 +117,7 @@ func (e *Engine) Deploy(ctx context.Context, project *db.Project) error {
 	}
 
 	e.db.UpdateProjectStatus(ctx, project.ID, "running", containerID, int(port))
-	e.logMsg(ctx, project.ID, fmt.Sprintf("Deployed at https://%s.%s (container: %s, port: %d)", project.Subdomain, e.domain, containerID, port), "deploy")
+	e.logMsg(ctx, project.ID, fmt.Sprintf("Deployed at https://%s.%s (container: %s, port: %d)", project.Subdomain, e.Domain, containerID, port), "deploy")
 
 	// Register with Caddy
 	e.registerRoute(project.Subdomain, int(port))

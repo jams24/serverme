@@ -127,6 +127,12 @@ func NewRouter(database *db.DB, jwtMgr *auth.JWTManager, registry *tunnel.Regist
 			r.Get("/billing/status", s.handleBillingStatus)
 			r.Get("/billing/check", s.handleCheckPayment)
 
+			// GitHub
+			r.Get("/github/status", s.handleGitHubStatus)
+			r.Post("/github/connect", s.handleGitHubSaveConnection)
+			r.Delete("/github", s.handleGitHubDisconnect)
+			r.Get("/github/repos", s.handleGitHubRepos)
+
 			// Deploy / Projects
 			r.Get("/projects", s.handleListProjects)
 			r.Post("/projects", s.handleCreateProject)
@@ -159,6 +165,11 @@ func NewRouter(database *db.DB, jwtMgr *auth.JWTManager, registry *tunnel.Regist
 
 	// Billing webhook (public — InventPay sends here)
 	r.Post("/api/v1/billing/webhook", s.handleBillingWebhook)
+
+	// GitHub (public routes)
+	r.Get("/api/v1/github/connect", s.handleGitHubConnect)
+	r.Get("/api/v1/github/callback", s.handleGitHubCallback)
+	r.Post("/api/v1/github/webhook", s.handleGitHubWebhook)
 
 	// WebSocket (separate auth via query param)
 	r.Get("/api/v1/ws/traffic/{url}", s.handleTrafficWebSocket)
