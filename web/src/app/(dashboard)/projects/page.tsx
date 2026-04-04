@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Rocket, Plus, Play, Square, Trash2, ExternalLink, RefreshCw,
-  Terminal, Globe, GitBranch, Search, Check, Loader2,
+  Terminal, Globe, GitBranch, Search, Check, Loader2, Code,
 } from "lucide-react";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8081";
@@ -17,6 +17,7 @@ const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8081";
 interface Project {
   id: string; name: string; subdomain: string; framework: string;
   repo_url: string; github_repo: string; status: string;
+  env_vars: Record<string, string>;
   last_deploy_at: string | null; created_at: string;
 }
 interface DeployLog {
@@ -55,6 +56,9 @@ function ProjectsContent() {
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [logs, setLogs] = useState<DeployLog[]>([]);
   const [deploying, setDeploying] = useState<string | null>(null);
+  const [editingEnv, setEditingEnv] = useState<string | null>(null);
+  const [envText, setEnvText] = useState("");
+  const [projectDetail, setProjectDetail] = useState<Project | null>(null);
 
   const headers = () => {
     const token = localStorage.getItem("sm_token");
@@ -159,6 +163,35 @@ function ProjectsContent() {
   async function loadLogs(id: string) {
     const res = await fetch(`${API}/api/v1/projects/${id}/logs`, { headers: headers() });
     if (res.ok) setLogs(await res.json());
+  }
+
+  async function loadProjectDetail(id: string) {
+    const res = await fetch(`${API}/api/v1/projects/${id}`, { headers: headers() });
+    if (res.ok) {
+      const data = await res.json();
+      setProjectDetail(data.project);
+      // Convert env_vars object to KEY=VALUE text
+      const envObj = data.project.env_vars || {};
+      setEnvText(Object.entries(envObj).map(([k, v]) => `${k}=${v}`).join("\n"));
+    }
+  }
+
+  async function saveEnvVars(id: string) {
+    // Parse KEY=VALUE lines into object
+    const envVars: Record<string, string> = {};
+    envText.split("\n").forEach((line) => {
+      const eq = line.indexOf("=");
+      if (eq > 0) {
+        envVars[line.slice(0, eq).trim()] = line.slice(eq + 1).trim();
+      }
+    });
+
+    await fetch(`${API}/api/v1/projects/${id}`, {
+      method: "PUT", headers: headers(),
+      body: JSON.stringify({ env_vars: envVars }),
+    });
+    setEditingEnv(null);
+    load();
   }
 
   async function disconnectGH() {
@@ -328,6 +361,37 @@ function ProjectsContent() {
                     </Button>
                   </div>
                 </div>
+
+                {/* Env Vars */}
+                {selectedProject === p.id && (
+                  <div className="mt-4">
+                    {editingEnv === p.id ? (
+                      <div className="rounded-lg border border-border/40 p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium">Environment Variables</span>
+                          <span className="text-[10px] text-muted-foreground">KEY=VALUE format, one per line</span>
+                        </div>
+                        <textarea
+                          value={envText}
+                          onChange={(e) => setEnvText(e.target.value)}
+                          placeholder={"BOT_TOKEN=123456:ABC...\nDATABASE_URL=postgres://...\nPORT=3000"}
+                          className="w-full h-32 rounded-md border border-input bg-[#09090b] px-3 py-2 font-mono text-xs text-zinc-300 placeholder:text-zinc-700 resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+                        />
+                        <div className="flex gap-2">
+                          <Button size="sm" className="h-7 text-xs" onClick={async () => { await saveEnvVars(p.id); deploy(p.id); }}>Save & Redeploy</Button>
+                          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditingEnv(null)}>Cancel</Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => { setEditingEnv(p.id); loadProjectDetail(p.id); }}>
+                        <Code className="h-3 w-3" /> Environment Variables
+                        {p.env_vars && Object.keys(p.env_vars).length > 0 && (
+                          <Badge variant="outline" className="ml-1 text-[9px]">{Object.keys(p.env_vars).length}</Badge>
+                        )}
+                      </Button>
+                    )}
+                  </div>
+                )}
 
                 {/* Logs */}
                 {selectedProject === p.id && logs.length > 0 && (
