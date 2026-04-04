@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -122,12 +123,14 @@ func (s *Server) handleDeployProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// For private repos, inject GitHub token into clone URL
-	if s.deployer.GitHub != nil {
+	// For private repos, inject GitHub token into clone URL (only if not already authenticated)
+	if s.deployer.GitHub != nil && project.RepoURL != "" && !strings.Contains(project.RepoURL, "@github.com") {
 		gc, _ := s.db.GetGitHubConnection(r.Context(), u.ID)
-		if gc != nil && project.RepoURL != "" {
-			// Replace https://github.com/... with https://TOKEN@github.com/...
-			project.RepoURL = s.deployer.GitHub.GetCloneURL(gc.AccessToken, extractRepoFullName(project.RepoURL))
+		if gc != nil {
+			repoName := extractRepoFullName(project.RepoURL)
+			if repoName != "" {
+				project.RepoURL = fmt.Sprintf("https://x-access-token:%s@github.com/%s.git", gc.AccessToken, repoName)
+			}
 		}
 	}
 

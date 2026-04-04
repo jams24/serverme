@@ -43,8 +43,9 @@ func (e *Engine) Deploy(ctx context.Context, project *db.Project) error {
 	dockerfile := e.generateDockerfile(project)
 	e.logMsg(ctx, project.ID, fmt.Sprintf("Framework: %s", project.Framework), "build")
 
-	// Build directory
+	// Build directory — clean first to avoid stale files
 	buildDir := fmt.Sprintf("/tmp/serverme-build/%s", project.ID)
+	exec.Command("rm", "-rf", buildDir).Run()
 	exec.Command("mkdir", "-p", buildDir).Run()
 
 	// If repo URL provided, clone it
@@ -60,20 +61,21 @@ func (e *Engine) Deploy(ctx context.Context, project *db.Project) error {
 		}
 	}
 
-	// Write Dockerfile
-	dockerfilePath := buildDir + "/Dockerfile"
-	exec.Command("bash", "-c", fmt.Sprintf("cat > %s << 'DOCKERFILE'\n%s\nDOCKERFILE", dockerfilePath, dockerfile)).Run()
+	// Build context
+	buildCtx := buildDir
+	if project.RepoURL != "" {
+		buildCtx = buildDir + "/app"
+	}
+
+	// Write Dockerfile only if the repo doesn't have one (or framework is not 'docker')
+	if project.Framework != "docker" || dockerfile != "" {
+		dockerfilePath := buildCtx + "/Dockerfile"
+		exec.Command("bash", "-c", fmt.Sprintf("cat > %s << 'DOCKERFILE'\n%s\nDOCKERFILE", dockerfilePath, dockerfile)).Run()
+	}
 
 	// Build Docker image
 	imageName := fmt.Sprintf("sm-project-%s", project.ID[:8])
 	e.logMsg(ctx, project.ID, "Building Docker image...", "build")
-
-	buildCtx := buildDir
-	if project.RepoURL != "" {
-		buildCtx = buildDir + "/app"
-		// Copy Dockerfile into app dir
-		exec.Command("cp", dockerfilePath, buildCtx+"/Dockerfile").Run()
-	}
 
 	cmd := exec.CommandContext(ctx, "docker", "build", "-t", imageName, buildCtx)
 	output, err := cmd.CombinedOutput()
