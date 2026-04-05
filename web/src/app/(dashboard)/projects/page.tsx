@@ -72,7 +72,7 @@ function ProjectsContent() {
     if (ghToken && ghUser) {
       fetch(`${API}/api/v1/github/connect`, {
         method: "POST", headers: headers(),
-        body: JSON.stringify({ access_token: ghToken, github_username: ghUser }),
+        body: JSON.stringify({ access_token: ghToken, github_username: ghUser, installation_id: parseInt(searchParams.get("installation_id") || "0") }),
       }).then(() => {
         setGhConnected(true);
         setGhUsername(ghUser);

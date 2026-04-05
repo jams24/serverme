@@ -132,13 +132,20 @@ func (s *Server) handleDeployProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// For private repos, inject GitHub token into clone URL (only if not already authenticated)
+	// For private repos, inject GitHub token into clone URL
 	if s.deployer.GitHub != nil && project.RepoURL != "" && !strings.Contains(project.RepoURL, "@github.com") {
 		gc, _ := s.db.GetGitHubConnection(r.Context(), u.ID)
 		if gc != nil {
 			repoName := extractRepoFullName(project.RepoURL)
 			if repoName != "" {
-				project.RepoURL = fmt.Sprintf("https://x-access-token:%s@github.com/%s.git", gc.AccessToken, repoName)
+				// Try installation token first (auto-refreshes), fall back to user token
+				token := gc.AccessToken
+				if gc.InstallationID > 0 {
+					if instToken, err := s.deployer.GitHub.GetInstallationToken(gc.InstallationID); err == nil && instToken != "" {
+						token = instToken
+					}
+				}
+				project.RepoURL = fmt.Sprintf("https://x-access-token:%s@github.com/%s.git", token, repoName)
 			}
 		}
 	}

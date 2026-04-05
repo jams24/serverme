@@ -1,10 +1,14 @@
 package deploy
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"math/rand"
 	"os"
 	"os/exec"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -35,78 +39,93 @@ func (e *Engine) Deploy(ctx context.Context, project *db.Project) error {
 	e.logMsg(ctx, project.ID, "Starting deployment...", "deploy")
 	e.db.UpdateProjectStatus(ctx, project.ID, "building", "", 0)
 
-	// Stop existing container if any
-	if project.ContainerID != "" {
-		e.stopContainer(project.ContainerID)
-	}
+	// Stop existing container
+	containerName := fmt.Sprintf("sm-%s", project.ID[:8])
+	exec.Command("docker", "rm", "-f", containerName).Run()
 
-	// Generate Dockerfile if not using custom
-	dockerfile := e.generateDockerfile(project)
-	e.logMsg(ctx, project.ID, fmt.Sprintf("Framework: %s", project.Framework), "build")
-
-	// Build directory — clean first to avoid stale files
+	// Clean build directory
 	buildDir := fmt.Sprintf("/tmp/serverme-build/%s", project.ID)
 	exec.Command("rm", "-rf", buildDir).Run()
 	exec.Command("mkdir", "-p", buildDir).Run()
 
-	// If repo URL provided, clone it
+	// Clone repo if URL provided
+	buildCtx := buildDir
 	if project.RepoURL != "" {
-		e.logMsg(ctx, project.ID, fmt.Sprintf("Cloning %s (branch: %s)...", project.RepoURL, project.Branch), "build")
+		e.logMsg(ctx, project.ID, fmt.Sprintf("Cloning %s (branch: %s)...", maskToken(project.RepoURL), project.Branch), "build")
 
-		cmd := exec.CommandContext(ctx, "git", "clone", "--depth", "1", "--branch", project.Branch, project.RepoURL, buildDir+"/app")
+		cloneDir := buildDir + "/app"
+		cmd := exec.CommandContext(ctx, "git", "clone", "--depth", "1", "--branch", project.Branch, project.RepoURL, cloneDir)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			e.logMsg(ctx, project.ID, fmt.Sprintf("Clone failed: %s", string(output)), "error")
 			e.db.UpdateProjectStatus(ctx, project.ID, "failed", "", 0)
 			return fmt.Errorf("git clone: %w", err)
 		}
+		buildCtx = cloneDir
 	}
 
-	// Build context — use cloned repo dir if available
-	buildCtx := buildDir
-	if project.RepoURL != "" {
-		buildCtx = buildDir + "/app"
+	// Determine framework
+	framework := project.Framework
+	if framework == "" {
+		framework = e.detectFramework(buildCtx)
+	}
+	e.logMsg(ctx, project.ID, fmt.Sprintf("Framework: %s", framework), "build")
+
+	// Generate Dockerfile if repo doesn't have one
+	if framework != "docker" || !fileExists(buildCtx+"/Dockerfile") {
+		dockerfile := e.generateDockerfile(project, framework)
+		if dockerfile != "" {
+			os.WriteFile(buildCtx+"/Dockerfile", []byte(dockerfile), 0644)
+		}
 	}
 
-	// For non-docker frameworks, write our generated Dockerfile
-	if project.Framework != "docker" && dockerfile != "" {
-		dockerfilePath := buildCtx + "/Dockerfile"
-		exec.Command("bash", "-c", fmt.Sprintf("cat > %s << 'DOCKERFILE'\n%s\nDOCKERFILE", dockerfilePath, dockerfile)).Run()
-	}
-
-	// Verify Dockerfile exists in build context
-	if _, err := os.Stat(buildCtx + "/Dockerfile"); os.IsNotExist(err) {
-		e.logMsg(ctx, project.ID, "No Dockerfile found in repository", "error")
+	// Verify Dockerfile exists
+	if !fileExists(buildCtx + "/Dockerfile") {
+		e.logMsg(ctx, project.ID, "No Dockerfile found in repository. Add a Dockerfile or select a framework.", "error")
 		e.db.UpdateProjectStatus(ctx, project.ID, "failed", "", 0)
-		return fmt.Errorf("no Dockerfile found")
+		return fmt.Errorf("no Dockerfile")
 	}
 
-	// Build Docker image
-	imageName := fmt.Sprintf("sm-project-%s", project.ID[:8])
-	e.logMsg(ctx, project.ID, "Building Docker image...", "build")
+	// Auto-detect exposed port from Dockerfile
+	containerPort := detectExposedPort(buildCtx + "/Dockerfile")
+	e.logMsg(ctx, project.ID, fmt.Sprintf("Detected container port: %d", containerPort), "build")
 
-	cmd := exec.CommandContext(ctx, "docker", "build", "-t", imageName, buildCtx)
+	// Build Docker image — always --no-cache to avoid stale layers
+	imageName := fmt.Sprintf("sm-project-%s", project.ID[:8])
+	e.logMsg(ctx, project.ID, "Building Docker image (this may take a few minutes)...", "build")
+
+	cmd := exec.CommandContext(ctx, "docker", "build", "--no-cache", "-t", imageName, buildCtx)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		e.logMsg(ctx, project.ID, fmt.Sprintf("Build failed: %s", string(output)), "error")
+		// Extract the actual error from build output
+		errMsg := extractBuildError(string(output))
+		e.logMsg(ctx, project.ID, fmt.Sprintf("Build failed: %s", errMsg), "error")
 		e.db.UpdateProjectStatus(ctx, project.ID, "failed", "", 0)
 		return fmt.Errorf("docker build: %w", err)
 	}
 	e.logMsg(ctx, project.ID, "Build successful", "build")
 
-	// Find an available port
-	port := 10100 + (time.Now().UnixNano() % 900)
+	// Find available host port
+	hostPort := 10100 + rand.Intn(900)
+	for i := 0; i < 50; i++ {
+		if !isPortInUse(hostPort) {
+			break
+		}
+		hostPort = 10100 + rand.Intn(900)
+	}
 
 	// Build env var flags
 	var envFlags []string
 	for k, v := range project.EnvVars {
 		envFlags = append(envFlags, "-e", fmt.Sprintf("%s=%s", k, v))
 	}
+	// Always set PORT env var
+	envFlags = append(envFlags, "-e", fmt.Sprintf("PORT=%d", containerPort))
 
 	// Run container
 	e.logMsg(ctx, project.ID, "Starting container...", "deploy")
-	args := []string{"run", "-d", "--name", fmt.Sprintf("sm-%s", project.ID[:8]),
-		"-p", fmt.Sprintf("%d:3000", port),
+	args := []string{"run", "-d", "--name", containerName,
+		"-p", fmt.Sprintf("%d:%d", hostPort, containerPort),
 		"--restart", "unless-stopped",
 		"--memory", "512m", "--cpus", "0.5",
 	}
@@ -126,13 +145,23 @@ func (e *Engine) Deploy(ctx context.Context, project *db.Project) error {
 		containerID = containerID[:12]
 	}
 
-	e.db.UpdateProjectStatus(ctx, project.ID, "running", containerID, int(port))
-	e.logMsg(ctx, project.ID, fmt.Sprintf("Deployed at https://%s.%s (container: %s, port: %d)", project.Subdomain, e.Domain, containerID, port), "deploy")
+	// Wait and check health
+	time.Sleep(5 * time.Second)
+	healthy := e.checkContainerHealth(containerName)
 
-	// Register with Caddy
-	e.registerRoute(project.Subdomain, int(port))
+	if healthy {
+		e.db.UpdateProjectStatus(ctx, project.ID, "running", containerID, hostPort)
+		e.logMsg(ctx, project.ID, fmt.Sprintf("Deployed at https://%s.%s (port: %d)", project.Subdomain, e.Domain, hostPort), "deploy")
+	} else {
+		// Get crash logs
+		crashLogs := getContainerLogs(containerName, 10)
+		e.logMsg(ctx, project.ID, fmt.Sprintf("Container unhealthy — check logs:\n%s", crashLogs), "error")
+		e.db.UpdateProjectStatus(ctx, project.ID, "failed", containerID, hostPort)
+	}
 
-	// Cleanup build dir
+	e.registerRoute(project.Subdomain, hostPort)
+
+	// Cleanup
 	exec.Command("rm", "-rf", buildDir).Run()
 
 	return nil
@@ -140,10 +169,9 @@ func (e *Engine) Deploy(ctx context.Context, project *db.Project) error {
 
 // Stop stops a project's container.
 func (e *Engine) Stop(ctx context.Context, project *db.Project) error {
-	if project.ContainerID != "" {
-		e.stopContainer(project.ContainerID)
-		e.removeContainer(fmt.Sprintf("sm-%s", project.ID[:8]))
-	}
+	containerName := fmt.Sprintf("sm-%s", project.ID[:8])
+	exec.Command("docker", "stop", containerName).Run()
+	exec.Command("docker", "rm", "-f", containerName).Run()
 	e.db.UpdateProjectStatus(ctx, project.ID, "stopped", "", 0)
 	e.logMsg(ctx, project.ID, "Project stopped", "deploy")
 	return nil
@@ -152,29 +180,153 @@ func (e *Engine) Stop(ctx context.Context, project *db.Project) error {
 // Delete stops and removes a project completely.
 func (e *Engine) Delete(ctx context.Context, project *db.Project) error {
 	e.Stop(ctx, project)
-	// Remove Docker image
 	exec.Command("docker", "rmi", fmt.Sprintf("sm-project-%s", project.ID[:8])).Run()
 	return nil
 }
 
-func (e *Engine) stopContainer(containerID string) {
-	exec.Command("docker", "stop", containerID).Run()
-}
-
-func (e *Engine) removeContainer(name string) {
-	exec.Command("docker", "rm", "-f", name).Run()
+// GetProjectPort returns the container port for a deployed project by subdomain.
+func (e *Engine) GetProjectPort(subdomain string) (int, bool) {
+	ctx := context.Background()
+	rows, err := e.db.Pool.Query(ctx,
+		`SELECT container_port FROM projects WHERE subdomain = $1 AND status = 'running' AND container_port > 0`,
+		subdomain,
+	)
+	if err != nil {
+		return 0, false
+	}
+	defer rows.Close()
+	if rows.Next() {
+		var port int
+		rows.Scan(&port)
+		return port, port > 0
+	}
+	return 0, false
 }
 
 func (e *Engine) registerRoute(subdomain string, port int) {
-	// Caddy handles all *.serverme.site via on-demand TLS
-	// The container port is proxied via the tunnel HTTP proxy OR
-	// we add a route dynamically. For simplicity, use the existing
-	// Caddy catch-all and have the API proxy to the container.
 	e.log.Info().Str("subdomain", subdomain).Int("port", port).Msg("route registered")
 }
 
-func (e *Engine) generateDockerfile(project *db.Project) string {
-	switch project.Framework {
+func (e *Engine) logMsg(ctx context.Context, projectID, message, level string) {
+	e.db.AddDeployLog(ctx, projectID, message, level)
+	e.log.Info().Str("project", projectID).Str("level", level).Msg(message)
+}
+
+// --- Helpers ---
+
+// detectFramework auto-detects the project framework from files.
+func (e *Engine) detectFramework(dir string) string {
+	if fileExists(dir + "/Dockerfile") {
+		return "docker"
+	}
+	if fileExists(dir + "/next.config.js") || fileExists(dir + "/next.config.ts") || fileExists(dir + "/next.config.mjs") {
+		return "nextjs"
+	}
+	if fileExists(dir + "/package.json") {
+		return "node"
+	}
+	if fileExists(dir + "/requirements.txt") || fileExists(dir + "/Pipfile") {
+		return "python"
+	}
+	if fileExists(dir + "/go.mod") {
+		return "docker"
+	}
+	if fileExists(dir + "/index.html") {
+		return "static"
+	}
+	return "node"
+}
+
+// detectExposedPort reads the Dockerfile and finds EXPOSE port.
+func detectExposedPort(dockerfilePath string) int {
+	f, err := os.Open(dockerfilePath)
+	if err != nil {
+		return 3000 // default
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	re := regexp.MustCompile(`(?i)^EXPOSE\s+(\d+)`)
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if matches := re.FindStringSubmatch(line); len(matches) > 1 {
+			if port, err := strconv.Atoi(matches[1]); err == nil {
+				return port
+			}
+		}
+	}
+	return 3000
+}
+
+// checkContainerHealth checks if a container is running (not restarting).
+func (e *Engine) checkContainerHealth(name string) bool {
+	output, err := exec.Command("docker", "inspect", "--format", "{{.State.Status}}", name).Output()
+	if err != nil {
+		return false
+	}
+	status := strings.TrimSpace(string(output))
+	return status == "running"
+}
+
+// getContainerLogs returns the last N lines of container logs.
+func getContainerLogs(name string, lines int) string {
+	output, _ := exec.Command("docker", "logs", "--tail", strconv.Itoa(lines), name).CombinedOutput()
+	return strings.TrimSpace(string(output))
+}
+
+// extractBuildError extracts the meaningful error from Docker build output.
+func extractBuildError(output string) string {
+	lines := strings.Split(output, "\n")
+	// Find lines with "error", "ERROR", "failed", "FAILED"
+	var errorLines []string
+	for _, line := range lines {
+		lower := strings.ToLower(line)
+		if strings.Contains(lower, "error") || strings.Contains(lower, "failed") || strings.Contains(lower, "not found") {
+			errorLines = append(errorLines, strings.TrimSpace(line))
+		}
+	}
+	if len(errorLines) > 0 {
+		// Return last 3 error lines
+		start := len(errorLines) - 3
+		if start < 0 {
+			start = 0
+		}
+		return strings.Join(errorLines[start:], "\n")
+	}
+	// Fallback: last 5 lines
+	start := len(lines) - 5
+	if start < 0 {
+		start = 0
+	}
+	return strings.Join(lines[start:], "\n")
+}
+
+// maskToken hides tokens in URLs for logging.
+func maskToken(url string) string {
+	if idx := strings.Index(url, "@"); idx > 0 {
+		prefix := url[:strings.Index(url, "://")+3]
+		suffix := url[idx:]
+		return prefix + "***" + suffix
+	}
+	return url
+}
+
+// isPortInUse checks if a port is already in use.
+func isPortInUse(port int) bool {
+	output, _ := exec.Command("ss", "-tlnp", fmt.Sprintf("sport = :%d", port)).Output()
+	return strings.Contains(string(output), strconv.Itoa(port))
+}
+
+// fileExists checks if a file exists.
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// generateDockerfile creates a Dockerfile based on framework.
+func (e *Engine) generateDockerfile(project *db.Project, framework string) string {
+	switch framework {
 	case "nextjs":
 		return `FROM node:20-alpine
 WORKDIR /app
@@ -188,7 +340,7 @@ CMD ["npm", "start"]`
 	case "node":
 		startCmd := project.StartCmd
 		if startCmd == "" {
-			startCmd = "node index.js"
+			startCmd = "npm start"
 		}
 		return fmt.Sprintf(`FROM node:20-alpine
 WORKDIR /app
@@ -196,7 +348,7 @@ COPY package*.json ./
 RUN npm ci --production
 COPY . .
 EXPOSE 3000
-CMD ["%s"]`, startCmd)
+CMD %s`, formatCmd(startCmd))
 
 	case "python":
 		startCmd := project.StartCmd
@@ -209,7 +361,7 @@ COPY requirements.txt* ./
 RUN pip install --no-cache-dir -r requirements.txt 2>/dev/null || true
 COPY . .
 EXPOSE 3000
-CMD ["%s"]`, startCmd)
+CMD %s`, formatCmd(startCmd))
 
 	case "static":
 		return `FROM nginx:alpine
@@ -217,41 +369,16 @@ COPY . /usr/share/nginx/html
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]`
 
-	case "docker":
-		return "" // User provides their own Dockerfile
-
 	default:
-		return `FROM node:20-alpine
-WORKDIR /app
-COPY . .
-RUN npm ci 2>/dev/null || true
-EXPOSE 3000
-CMD ["npm", "start"]`
+		return ""
 	}
 }
 
-func (e *Engine) logMsg(ctx context.Context, projectID, message, level string) {
-	e.db.AddDeployLog(ctx, projectID, message, level)
-	e.log.Info().Str("project", projectID).Str("level", level).Msg(message)
-}
-
-// GetProjectPort returns the container port for a deployed project by subdomain.
-// Implements proxy.ProjectLookup interface.
-func (e *Engine) GetProjectPort(subdomain string) (int, bool) {
-	ctx := context.Background()
-	rows, err := e.db.Pool.Query(ctx,
-		`SELECT container_port FROM projects WHERE subdomain = $1 AND status = 'running' AND container_port > 0`,
-		subdomain,
-	)
-	if err != nil {
-		return 0, false
+func formatCmd(cmd string) string {
+	parts := strings.Fields(cmd)
+	quoted := make([]string, len(parts))
+	for i, p := range parts {
+		quoted[i] = fmt.Sprintf(`"%s"`, p)
 	}
-	defer rows.Close()
-
-	if rows.Next() {
-		var port int
-		rows.Scan(&port)
-		return port, port > 0
-	}
-	return 0, false
+	return "[" + strings.Join(quoted, ", ") + "]"
 }

@@ -55,10 +55,23 @@ func (s *Server) handleGitHubCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Find the ServerMe user — check auth cookie/header
-	// For now, redirect with the token and let frontend save it
-	redirectURL := fmt.Sprintf("https://serverme.site/projects?github_connected=true&github_token=%s&github_user=%s",
-		url.QueryEscape(tokenResp.AccessToken), url.QueryEscape(ghUser.Login))
+	// Find installation ID for this user
+	installID := int64(0)
+	if s.deployer != nil && s.deployer.GitHub != nil {
+		installations, _ := s.deployer.GitHub.GetInstallations()
+		for _, inst := range installations {
+			if acct, ok := inst["account"].(map[string]interface{}); ok {
+				if login, ok := acct["login"].(string); ok && login == ghUser.Login {
+					if id, ok := inst["id"].(float64); ok {
+						installID = int64(id)
+					}
+				}
+			}
+		}
+	}
+
+	redirectURL := fmt.Sprintf("https://serverme.site/projects?github_connected=true&github_token=%s&github_user=%s&installation_id=%d",
+		url.QueryEscape(tokenResp.AccessToken), url.QueryEscape(ghUser.Login), installID)
 
 	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
@@ -70,13 +83,14 @@ func (s *Server) handleGitHubSaveConnection(w http.ResponseWriter, r *http.Reque
 	var req struct {
 		AccessToken    string `json:"access_token"`
 		GitHubUsername string `json:"github_username"`
+		InstallationID int64  `json:"installation_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.AccessToken == "" {
 		writeError(w, http.StatusBadRequest, "access_token required")
 		return
 	}
 
-	err := s.db.SaveGitHubConnection(r.Context(), u.ID, req.GitHubUsername, req.AccessToken, "", 0)
+	err := s.db.SaveGitHubConnection(r.Context(), u.ID, req.GitHubUsername, req.AccessToken, "", req.InstallationID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to save connection")
 		return
