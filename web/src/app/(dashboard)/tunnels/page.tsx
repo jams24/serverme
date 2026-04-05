@@ -4,11 +4,19 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { RefreshCw, Waypoints, Globe, Terminal as TermIcon } from "lucide-react";
-import { api, type Tunnel } from "@/lib/api";
+import { RefreshCw, Waypoints, Globe, Terminal as TermIcon, Rocket } from "lucide-react";
+import { api } from "@/lib/api";
+
+interface TunnelItem {
+  url: string;
+  protocol: string;
+  name: string;
+  type?: string;
+  status?: string;
+}
 
 export default function TunnelsPage() {
-  const [tunnels, setTunnels] = useState<Tunnel[]>([]);
+  const [tunnels, setTunnels] = useState<TunnelItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   async function load() {
@@ -30,12 +38,14 @@ export default function TunnelsPage() {
   }, []);
 
   const protocolIcon = (proto: string) => {
+    if (proto === "deploy") return <Rocket className="h-4 w-4" />;
     if (proto === "http") return <Globe className="h-4 w-4" />;
     if (proto === "tcp") return <TermIcon className="h-4 w-4" />;
     return <Waypoints className="h-4 w-4" />;
   };
 
   const protocolColor = (proto: string) => {
+    if (proto === "deploy") return "bg-orange-500/10 text-orange-500";
     if (proto === "http") return "bg-blue-500/10 text-blue-500";
     if (proto === "tcp") return "bg-green-500/10 text-green-500";
     return "bg-violet-500/10 text-violet-500";
@@ -47,7 +57,7 @@ export default function TunnelsPage() {
         <div>
           <h1 className="text-2xl font-bold">Tunnels</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Active tunnels connected to your account.
+            Active tunnels and deployed projects.
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={load} className="gap-2">

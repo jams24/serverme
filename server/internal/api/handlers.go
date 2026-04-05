@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 
@@ -340,6 +341,8 @@ func (s *Server) handleListTunnels(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var result []map[string]interface{}
+
+	// Active CLI tunnels
 	for _, uid := range userIDs {
 		tunnels := s.registry.ListByUser(uid)
 		for _, t := range tunnels {
@@ -349,7 +352,27 @@ func (s *Server) handleListTunnels(w http.ResponseWriter, r *http.Request) {
 				"name":      t.Name,
 				"client_id": t.ClientID,
 				"user_id":   t.UserID,
+				"type":      "tunnel",
 			})
+		}
+	}
+
+	// Deployed projects (running containers)
+	if s.db != nil {
+		for _, uid := range userIDs {
+			projects, _ := s.db.ListProjects(r.Context(), uid)
+			for _, p := range projects {
+				if p.Status == "running" {
+					result = append(result, map[string]interface{}{
+						"url":      fmt.Sprintf("https://%s.%s", p.Subdomain, "serverme.site"),
+						"protocol": "deploy",
+						"name":     p.Name,
+						"user_id":  p.UserID,
+						"type":     "project",
+						"status":   p.Status,
+					})
+				}
+			}
 		}
 	}
 

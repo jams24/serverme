@@ -28,11 +28,21 @@ func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) {
 		req.Framework = "node"
 	}
 
+	// Check subdomain availability
+	available, reason := s.db.CheckSubdomainAvailable(r.Context(), req.Subdomain, u.ID)
+	if !available {
+		writeError(w, http.StatusConflict, reason)
+		return
+	}
+
 	project, err := s.db.CreateProject(r.Context(), u.ID, req.Name, req.Subdomain, req.Framework)
 	if err != nil {
 		writeError(w, http.StatusConflict, "subdomain already taken")
 		return
 	}
+
+	// Auto-reserve the subdomain so no tunnel can use it
+	s.db.ReserveSubdomainAuto(r.Context(), u.ID, req.Subdomain)
 
 	writeJSON(w, http.StatusCreated, project)
 }
@@ -192,6 +202,9 @@ func (s *Server) handleDeleteProject(w http.ResponseWriter, r *http.Request) {
 		s.deployer.Delete(r.Context(), project)
 	}
 	s.db.DeleteProject(r.Context(), projectID, u.ID)
+
+	// Release the subdomain so it can be reused
+	s.db.ReleaseSubdomain(r.Context(), u.ID, project.Subdomain)
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
