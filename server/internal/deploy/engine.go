@@ -43,6 +43,9 @@ func (e *Engine) Deploy(ctx context.Context, project *db.Project) error {
 	containerName := fmt.Sprintf("sm-%s", project.ID[:8])
 	exec.Command("docker", "rm", "-f", containerName).Run()
 
+	// Ensure data directory exists for persistence
+	exec.Command("mkdir", "-p", fmt.Sprintf("/opt/serverme/project-data/%s", project.ID[:8])).Run()
+
 	// Clean build directory
 	buildDir := fmt.Sprintf("/tmp/serverme-build/%s", project.ID)
 	exec.Command("rm", "-rf", buildDir).Run()
@@ -122,13 +125,31 @@ func (e *Engine) Deploy(ctx context.Context, project *db.Project) error {
 	// Always set PORT env var
 	envFlags = append(envFlags, "-e", fmt.Sprintf("PORT=%d", containerPort))
 
+	// Detect all exposed ports and map them
+	allPorts := detectAllExposedPorts(buildCtx + "/Dockerfile")
+
 	// Run container
 	e.logMsg(ctx, project.ID, "Starting container...", "deploy")
-	args := []string{"run", "-d", "--name", containerName,
-		"-p", fmt.Sprintf("%d:%d", hostPort, containerPort),
-		"--restart", "unless-stopped",
-		"--memory", "512m", "--cpus", "0.5",
+	args := []string{"run", "-d", "--name", containerName}
+
+	// Map primary port
+	args = append(args, "-p", fmt.Sprintf("%d:%d", hostPort, containerPort))
+
+	// Map additional ports
+	for _, p := range allPorts {
+		if p != containerPort {
+			extraHost := 10100 + rand.Intn(900)
+			for isPortInUse(extraHost) || extraHost == hostPort {
+				extraHost = 10100 + rand.Intn(900)
+			}
+			args = append(args, "-p", fmt.Sprintf("%d:%d", extraHost, p))
+		}
 	}
+
+	args = append(args, "--restart", "unless-stopped", "--memory", "512m", "--cpus", "0.5")
+
+	// Add data volume for persistence
+	args = append(args, "-v", fmt.Sprintf("/opt/serverme/project-data/%s:/app/data", project.ID[:8]))
 	args = append(args, envFlags...)
 	args = append(args, imageName)
 
@@ -237,7 +258,32 @@ func (e *Engine) detectFramework(dir string) string {
 	return "node"
 }
 
-// detectExposedPort reads the Dockerfile and finds EXPOSE port.
+// detectAllExposedPorts returns all EXPOSE ports from a Dockerfile.
+func detectAllExposedPorts(dockerfilePath string) []int {
+	f, err := os.Open(dockerfilePath)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+
+	re := regexp.MustCompile(`\d+`)
+	scanner := bufio.NewScanner(f)
+	var ports []int
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if strings.HasPrefix(strings.ToUpper(line), "EXPOSE") {
+			for _, match := range re.FindAllString(line, -1) {
+				if p, err := strconv.Atoi(match); err == nil && p > 0 {
+					ports = append(ports, p)
+				}
+			}
+		}
+	}
+	return ports
+}
+
+// detectExposedPort reads the Dockerfile and finds the first EXPOSE port.
 func detectExposedPort(dockerfilePath string) int {
 	f, err := os.Open(dockerfilePath)
 	if err != nil {
