@@ -3,6 +3,7 @@ package deploy
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -61,16 +62,23 @@ func (e *Engine) Deploy(ctx context.Context, project *db.Project) error {
 		}
 	}
 
-	// Build context
+	// Build context — use cloned repo dir if available
 	buildCtx := buildDir
 	if project.RepoURL != "" {
 		buildCtx = buildDir + "/app"
 	}
 
-	// Write Dockerfile only if the repo doesn't have one (or framework is not 'docker')
-	if project.Framework != "docker" || dockerfile != "" {
+	// For non-docker frameworks, write our generated Dockerfile
+	if project.Framework != "docker" && dockerfile != "" {
 		dockerfilePath := buildCtx + "/Dockerfile"
 		exec.Command("bash", "-c", fmt.Sprintf("cat > %s << 'DOCKERFILE'\n%s\nDOCKERFILE", dockerfilePath, dockerfile)).Run()
+	}
+
+	// Verify Dockerfile exists in build context
+	if _, err := os.Stat(buildCtx + "/Dockerfile"); os.IsNotExist(err) {
+		e.logMsg(ctx, project.ID, "No Dockerfile found in repository", "error")
+		e.db.UpdateProjectStatus(ctx, project.ID, "failed", "", 0)
+		return fmt.Errorf("no Dockerfile found")
 	}
 
 	// Build Docker image

@@ -93,17 +93,26 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Branch == "" {
-		req.Branch = "main"
-	}
-	if req.EnvVars == nil {
-		req.EnvVars = project.EnvVars
-	}
+	// Only update env vars if that's all that was sent
+	if req.EnvVars != nil && req.RepoURL == "" && req.GitHubRepo == "" {
+		s.db.UpdateProjectEnvVars(r.Context(), projectID, req.EnvVars)
+	} else {
+		// Full config update — preserve existing values for empty fields
+		if req.Branch == "" {
+			req.Branch = project.Branch
+		}
+		if req.RepoURL == "" {
+			req.RepoURL = project.RepoURL
+		}
+		if req.EnvVars == nil {
+			req.EnvVars = project.EnvVars
+		}
 
-	s.db.UpdateProjectConfig(r.Context(), projectID, req.RepoURL, req.Branch, req.BuildCmd, req.StartCmd, req.EnvVars)
+		s.db.UpdateProjectConfig(r.Context(), projectID, req.RepoURL, req.Branch, req.BuildCmd, req.StartCmd, req.EnvVars)
 
-	if req.GitHubRepo != "" {
-		s.db.UpdateProjectGitHub(r.Context(), projectID, req.GitHubRepo, req.Branch, true)
+		if req.GitHubRepo != "" {
+			s.db.UpdateProjectGitHub(r.Context(), projectID, req.GitHubRepo, req.Branch, true)
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 }

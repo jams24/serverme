@@ -142,3 +142,12 @@ func (d *DB) GetDeployLogs(ctx context.Context, projectID string, limit int) ([]
 	}
 	return logs, nil
 }
+
+func (d *DB) UpdateProjectEnvVars(ctx context.Context, projectID string, envVars map[string]string) error {
+	envJSON, _ := json.Marshal(envVars)
+	_, err := d.Pool.Exec(ctx,
+		`UPDATE projects SET env_vars = $2, updated_at = now() WHERE id = $1`,
+		projectID, envJSON,
+	)
+	return err
+}
